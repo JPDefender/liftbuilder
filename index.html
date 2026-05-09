@@ -254,78 +254,12 @@ const CAT_META={
 //  STATE
 // ═══════════════════════════════════════════════════
 let state = {
-  activeProgId: 'prog_1',
-  activeOrg: null,        // null = all schools, string = filter to this school
-  activeTab: 'program',   // program | volume | peaking
-  currentWeek: 3,
-  volWeek: null,          // null = use currentWeek
-  programs: {
-    prog_1: {
-      id: 'prog_1',
-      name: 'Seminole Girls — 25/26',
-      org: 'Seminole H.S.',
-      trainingDays: ['Monday','Tuesday','Wednesday','Friday'],
-      weeks: {
-        3: {
-          note: "Add laying ankle rotation to team warm up",
-          phase: 'intensification',
-          days: {
-            Monday: {
-              focus:'Snatch / Bench / Squat',
-              mobility:"Banded Shoulder Dislocates (10) · Prone I's Y's T's (5) · 90/90 Hip Rotations (6/side) · Knee to Wall Ankle Rocks (10/side)",
-              exercises:[
-                {name:'Tempo Snatch Pull + Snatch + OHS',sets:5,reps:2,intensity:72,volume:30,category:'snatch'},
-                {name:'Dip Power Clean',sets:4,reps:6,intensity:67,volume:24,category:'clean'},
-                {name:'Bench Press (3x3@85%, 2x1@90%, 1xAMRAP@90%)',sets:6,reps:4,intensity:88,volume:23,category:'bench'},
-                {name:'Back Squat (3x1@85%)',sets:3,reps:1,intensity:85,volume:3,category:'squat'},
-              ]
-            },
-            Tuesday:{
-              focus:'Press / Clean / Squat / Core',
-              mobility:"Shoulder Passthrough (10) · World's Greatest Stretch (5/side) · Swimmers Stretch (10)",
-              exercises:[
-                {name:'Hand Eye Coordination (100 tennis ball throws)',sets:1,reps:100,intensity:0,volume:100,category:'other'},
-                {name:'Dip Power Snatch',sets:5,reps:2,intensity:62,volume:28,category:'snatch'},
-                {name:'Tempo Clean Pull + Power Clean + Push Press + Jerk',sets:5,reps:1,intensity:77,volume:25,category:'clean'},
-                {name:'Back Squat (3x1@85% – from Monday)',sets:3,reps:1,intensity:85,volume:3,category:'squat'},
-                {name:'Box Jumps for height',sets:3,reps:5,intensity:0,volume:15,category:'plyo'},
-                {name:'Seated Box Jumps',sets:3,reps:5,intensity:0,volume:15,category:'plyo'},
-                {name:'Wall Ball Drop Catch and Bound',sets:3,reps:6,intensity:0,volume:18,category:'plyo'},
-              ]
-            },
-            Wednesday:{
-              focus:'Competition Lifts / Bench',
-              mobility:"Scap Pushups (10) · A,T,Y,T,A (3) · 90/90 Hip Rotations (6/side) · Plate OH Lunges (10/side)",
-              exercises:[
-                {name:'Snatch (build to heavy double)',sets:5,reps:2,intensity:90,volume:10,category:'snatch'},
-                {name:'Clean and Jerk (build to heavy double)',sets:5,reps:2,intensity:90,volume:10,category:'clean'},
-                {name:'Close Grip Bench Press (8RM)',sets:1,reps:8,intensity:75,volume:8,category:'bench'},
-                {name:'Close Grip Bench Press (5x5-6 @8RM)',sets:5,reps:6,intensity:75,volume:30,category:'bench'},
-                {name:'Barbell Bent-over Row',sets:3,reps:10,intensity:65,volume:30,category:'accessory'},
-                {name:'Single Leg DB RDL',sets:3,reps:7,intensity:55,volume:21,category:'accessory'},
-              ]
-            },
-            Friday:{
-              focus:'Bench / Athlete Day',
-              mobility:"Band Pull-Aparts (10) · Banded External Rotation (7) · Single Leg Glute Bridge (10) · BW Squat w/ Pause (7)",
-              exercises:[
-                {name:'Tempo Front Squat + Front Squat (3x1@90%)',sets:4,reps:3,intensity:90,volume:12,category:'squat'},
-                {name:'Speed Front Squats (2x10@75%)',sets:2,reps:10,intensity:75,volume:20,category:'squat'},
-                {name:'3-Position Clean Pull with pauses (5x1@80%)',sets:5,reps:1,intensity:80,volume:5,category:'clean'},
-                {name:'Sotts Press',sets:3,reps:8,intensity:40,volume:24,category:'accessory'},
-                {name:'Alternating Straddle Leg Raises',sets:3,reps:10,intensity:0,volume:30,category:'core'},
-                {name:'Calf Raises',sets:3,reps:15,intensity:0,volume:45,category:'accessory'},
-                {name:'Lateral Bounds',sets:3,reps:12,intensity:0,volume:36,category:'plyo'},
-                {name:'Crosshack Squats',sets:3,reps:10,intensity:0,volume:30,category:'squat'},
-                {name:'Box Jumps',sets:3,reps:5,intensity:0,volume:15,category:'plyo'},
-                {name:'Kettlebell Swings',sets:3,reps:7,intensity:0,volume:21,category:'accessory'},
-              ]
-            }
-          }
-        }
-      }
-    }
-  }
+  activeProgId: null,
+  activeOrg: null,
+  activeTab: 'program',
+  currentWeek: 1,
+  volWeek: null,
+  programs: {}
 };
 
 // ═══════════════════════════════════════════════════
