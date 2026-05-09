@@ -60,7 +60,8 @@
     "publish": {
       "provider": "github",
       "owner": "JPDefender",
-      "repo": "liftbuilder"
+      "repo": "liftbuilder",
+      "releaseType": "release"
     }
   },
   "devDependencies": {
