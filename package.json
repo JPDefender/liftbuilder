@@ -1,6 +1,6 @@
 {
   "name": "liftbuilder",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "LiftBuilder — Weightlifting Program Manager",
   "main": "main.js",
   "scripts": {
@@ -26,6 +26,13 @@
       "target": [
         {
           "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        },
+        {
+          "target": "zip",
           "arch": [
             "arm64",
             "x64"
