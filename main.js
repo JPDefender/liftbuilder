@@ -31,7 +31,7 @@ autoUpdater.on('error', (err) => {
 // ── IPC handlers (called from renderer via preload) ────────────────────────
 ipcMain.handle('check-for-updates', () => autoUpdater.checkForUpdates());
 ipcMain.handle('download-update',   () => autoUpdater.downloadUpdate());
-ipcMain.handle('install-update',    () => autoUpdater.quitAndInstall());
+ipcMain.on('install-update',        () => setImmediate(() => autoUpdater.quitAndInstall()));
 ipcMain.handle('get-version',       () => app.getVersion());
 
 // ── Window ─────────────────────────────────────────────────────────────────

@@ -9,7 +9,7 @@
 <script src="vendor/jspdf.umd.min.js"></script>
 <style>
 :root {
-  --gold:#F5821F; --gold-light:#FFA552; --gold-dark:#B85D0A;
+  --gold:#4A90D9; --gold-light:#6AABF0; --gold-dark:#2E6FAF;
   --black:#0E0E0E; --dark:#1A1A1A; --dark2:#232323; --dark3:#2E2E2E;
   --muted:#888; --light:#C8C8C8; --white:#F5F5F0; --blue:#3A86D4;
   --gold-a05:color-mix(in srgb,var(--gold) 5%,transparent);
@@ -268,9 +268,9 @@ let state = {
 const THEMES = {
   seminole:  { accent:'#F5821F', light:'#FFA552', dark:'#B85D0A', white:'#F5F5F0' },
   fortmyers: { accent:'#00843D', light:'#4DAF7C', dark:'#00582A', white:'#FFFFFF' },
-  default:   { accent:'#F5821F', light:'#FFA552', dark:'#B85D0A', white:'#F5F5F0' },
+  default:   { accent:'#4A90D9', light:'#6AABF0', dark:'#2E6FAF', white:'#F0F4F8' },
 };
-let _theme = THEMES.seminole;
+let _theme = THEMES.default;
 
 function hexToRgba(hex, a) {
   const r=parseInt(hex.slice(1,3),16), g=parseInt(hex.slice(3,5),16), b=parseInt(hex.slice(5,7),16);
