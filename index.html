@@ -231,6 +231,7 @@ const CAT_META={
 // ═══════════════════════════════════════════════════
 let state = {
   activeProgId: 'prog_1',
+  activeOrg: null,        // null = all schools, string = filter to this school
   activeTab: 'program',   // program | volume | peaking
   currentWeek: 3,
   volWeek: null,          // null = use currentWeek
@@ -309,7 +310,7 @@ let charts = {};
 // ═══════════════════════════════════════════════════
 //  HELPERS
 // ═══════════════════════════════════════════════════
-function prog() { return state.programs[state.activeProgId]; }
+function prog() { return state.programs[state.activeProgId] || null; }
 function getWeek(w) { return prog() ? (prog().weeks[w]||null) : null; }
 function weekNums() { return prog() ? Object.keys(prog().weeks).map(Number).sort((a,b)=>a-b) : []; }
 function trainingDays() { return prog() ? prog().trainingDays : []; }
@@ -358,6 +359,28 @@ function destroyCharts(pid) {
   charts[pid]={};
 }
 
+function allOrgs() {
+  const orgs = new Set(Object.values(state.programs).map(p=>p.org).filter(Boolean));
+  return [...orgs].sort();
+}
+
+function switchOrg(org) {
+  state.activeOrg = org || null;
+  const activeProg = state.programs[state.activeProgId];
+  if (state.activeOrg && activeProg && activeProg.org !== state.activeOrg) {
+    const firstMatch = Object.values(state.programs).find(p => p.org === state.activeOrg);
+    if (firstMatch) {
+      state.activeProgId = firstMatch.id;
+      const ws = Object.keys(firstMatch.weeks || {}).map(Number).sort((a,b)=>a-b);
+      state.currentWeek = ws[0] || 1;
+      state.volWeek = null;
+      state.activeTab = 'program';
+    }
+  }
+  saveState();
+  render();
+}
+
 // ═══════════════════════════════════════════════════
 //  TOP-LEVEL RENDER
 // ═══════════════════════════════════════════════════
@@ -370,16 +393,29 @@ function render() {
 
 function renderProgBar() {
   const bar=document.getElementById('prog-bar');
-  const progs=Object.values(state.programs);
-  bar.innerHTML=progs.map(p=>`
+  const orgs=allOrgs();
+  const allProgs=Object.values(state.programs);
+  const filtered=state.activeOrg?allProgs.filter(p=>p.org===state.activeOrg):allProgs;
+
+  const schoolSel=orgs.length?`
+    <div style="display:flex;align-items:center;gap:6px;padding:0 12px 0 4px;border-right:1px solid var(--dark3);margin-right:4px;flex-shrink:0;">
+      <span style="font-size:10px;color:var(--muted);font-family:'Barlow Condensed',sans-serif;font-weight:600;letter-spacing:1px;text-transform:uppercase;white-space:nowrap;">School</span>
+      <select onchange="switchOrg(this.value)" style="background:var(--dark2);border:1px solid var(--dark3);border-radius:3px;color:${state.activeOrg?'var(--gold)':'var(--light)'};font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:600;cursor:pointer;padding:3px 6px;outline:none;">
+        <option value="">All</option>
+        ${orgs.map(o=>`<option value="${o}"${state.activeOrg===o?' selected':''}>${o}</option>`).join('')}
+      </select>
+    </div>`:'';
+
+  bar.innerHTML=schoolSel
+    +filtered.map(p=>`
     <div class="prog-tab ${p.id===state.activeProgId?'active':''}" onclick="switchProgram('${p.id}')">
       <span>${p.name}</span>
       <span class="prog-tab-actions">
         <button class="prog-tab-btn" onclick="event.stopPropagation();openEditProgram('${p.id}')" title="Rename">✏</button>
-        ${progs.length>1?`<button class="prog-tab-btn" onclick="event.stopPropagation();deleteProgram('${p.id}')" title="Delete" style="color:#E07070;">✕</button>`:''}
+        ${allProgs.length>1?`<button class="prog-tab-btn" onclick="event.stopPropagation();deleteProgram('${p.id}')" title="Delete" style="color:#E07070;">✕</button>`:''}
       </span>
     </div>`).join('')
-  +`<button class="new-prog-btn" onclick="openNewProgram()">+ New program</button>`;
+    +`<button class="new-prog-btn" onclick="openNewProgram()">+ New program</button>`;
 }
 
 function renderSidebar() {
@@ -392,9 +428,8 @@ function renderSidebar() {
     <div class="nav-item ${state.activeTab===t.id?'active':''}" onclick="switchTab('${t.id}')">
       <span>${t.icon}</span> ${t.label}
     </div>`).join('')
-  +`<div style="margin-top:auto;padding:0 1.25rem;">
-      <div style="font-size:11px;color:var(--muted);text-align:center;border-top:1px solid var(--dark3);padding-top:1rem;">${prog()&&prog().org?prog().org:'LiftBuilder'}</div>
-      <button onclick="clearAllData()" style="background:none;border:none;cursor:pointer;color:#555;font-size:10px;width:100%;text-align:center;margin-top:8px;padding:3px;">Clear all data</button>
+  +`<div style="margin-top:auto;border-top:1px solid var(--dark3);padding:0.9rem 1.25rem;">
+      <button onclick="clearAllData()" style="background:none;border:none;cursor:pointer;color:#555;font-size:10px;width:100%;text-align:center;padding:4px;">Clear all data</button>
     </div>`;
 }
 
@@ -438,6 +473,12 @@ function changeWeek(dir) {
 //  PROGRAM TAB
 // ═══════════════════════════════════════════════════
 function buildProgramHTML() {
+  if(!prog()) {
+    return `<div style="padding:3rem;text-align:center;">
+      <div style="font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:700;margin-bottom:8px;">No programs yet</div>
+      <div style="color:var(--muted);font-size:14px;">Use the <span style="color:var(--gold);font-weight:600;">+ New program</span> button above to get started.</div>
+    </div>`;
+  }
   const wd=getWeek(state.currentWeek);
   const phase=wd?wd.phase:'accumulation';
   const noteHTML=wd&&wd.note?`<div class="note-bar">📌 <span>${wd.note}</span></div>`:'';
@@ -1003,7 +1044,7 @@ function openNewProgram() {
     <h3>Create New Program</h3>
     <div class="form-field"><label>Program name</label><input type="text" id="np-name" placeholder="e.g. JV Girls 2026, Club Team A"></div>
     <div class="fg2">
-      <div class="form-field"><label>Organization / School</label><input type="text" id="np-org" placeholder="e.g. Seminole H.S."></div>
+      <div class="form-field"><label>Organization / School</label><input type="text" id="np-org" value="${state.activeOrg||''}" placeholder="e.g. Seminole H.S."></div>
       <div class="form-field"><label>Season / Year</label><input type="text" id="np-season" placeholder="e.g. 2025–2026"></div>
     </div>
     <div class="form-field"><label>Training days</label>
@@ -1057,7 +1098,7 @@ function saveEditProgram(pid) {
 
 function clearAllData() {
   if (!confirm('Delete ALL saved programs and start fresh? This cannot be undone.')) return;
-  localStorage.removeItem(STORAGE_KEY);
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({cleared: true, programs: {}}));
   location.reload();
 }
 
@@ -1080,6 +1121,7 @@ function togglePill(el,day) {
 // ═══════════════════════════════════════════════════
 function openManageDays() {
   const p=prog();
+  if(!p) return;
   document.getElementById('modal-body').innerHTML=`
     <h3>Training Days — ${p.name}</h3>
     <p style="font-size:13px;color:var(--muted);margin-bottom:1rem;">Choose which days athletes train. The program view and exports follow this schedule.</p>
@@ -1443,9 +1485,9 @@ const STORAGE_KEY = 'liftbuilder_v1';
 
 function saveState() {
   try {
-    // Only persist programs + active id; UI state (tab, week) is ephemeral
     const payload = {
       activeProgId: state.activeProgId,
+      activeOrg: state.activeOrg,
       programs: state.programs
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
@@ -1460,17 +1502,18 @@ function loadState() {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return false;
     const payload = JSON.parse(raw);
-    if (payload.programs && Object.keys(payload.programs).length) {
-      state.programs = payload.programs;
-      // Restore active program if it still exists
+    if (payload && typeof payload.programs !== 'undefined') {
+      state.programs = payload.programs || {};
+      if (payload.activeOrg !== undefined) state.activeOrg = payload.activeOrg;
       if (payload.activeProgId && state.programs[payload.activeProgId]) {
         state.activeProgId = payload.activeProgId;
       } else {
-        state.activeProgId = Object.keys(state.programs)[0];
+        state.activeProgId = Object.keys(state.programs)[0] || null;
       }
-      // Set currentWeek to first week of active program
-      const ws = Object.keys(state.programs[state.activeProgId].weeks || {}).map(Number).sort((a,b)=>a-b);
-      state.currentWeek = ws[0] || 1;
+      if (state.activeProgId) {
+        const ws = Object.keys(state.programs[state.activeProgId]?.weeks || {}).map(Number).sort((a,b)=>a-b);
+        state.currentWeek = ws[0] || 1;
+      }
       return true;
     }
   } catch(e) {
