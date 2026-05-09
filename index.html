@@ -9,9 +9,19 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <style>
 :root {
-  --gold:#C9A84C; --gold-light:#F2D98A; --gold-dark:#8A6A1F;
+  --gold:#F5821F; --gold-light:#FFA552; --gold-dark:#B85D0A;
   --black:#0E0E0E; --dark:#1A1A1A; --dark2:#232323; --dark3:#2E2E2E;
   --muted:#888; --light:#C8C8C8; --white:#F5F5F0; --blue:#3A86D4;
+  --gold-a05:color-mix(in srgb,var(--gold) 5%,transparent);
+  --gold-a08:color-mix(in srgb,var(--gold) 8%,transparent);
+  --gold-a10:color-mix(in srgb,var(--gold) 10%,transparent);
+  --gold-a12:color-mix(in srgb,var(--gold) 12%,transparent);
+  --gold-a15:color-mix(in srgb,var(--gold) 15%,transparent);
+  --gold-a20:color-mix(in srgb,var(--gold) 20%,transparent);
+  --gold-a25:color-mix(in srgb,var(--gold) 25%,transparent);
+  --gold-a30:color-mix(in srgb,var(--gold) 30%,transparent);
+  --gold-a40:color-mix(in srgb,var(--gold) 40%,transparent);
+  --gold-a50:color-mix(in srgb,var(--gold) 50%,transparent);
 }
 *{box-sizing:border-box;margin:0;padding:0;}
 body{font-family:'Barlow',sans-serif;background:var(--black);color:var(--white);min-height:100vh;font-size:15px;}
@@ -60,11 +70,11 @@ h1,h2,h3,h4{font-family:'Barlow Condensed',sans-serif;}
 .phase-badge{font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:600;letter-spacing:1px;padding:3px 9px;border-radius:3px;text-transform:uppercase;}
 .phase-accumulation{background:rgba(31,95,166,0.2);color:var(--blue);border:1px solid rgba(31,95,166,0.4);}
 .phase-intensification{background:rgba(46,125,82,0.2);color:#5EC08A;border:1px solid rgba(46,125,82,0.4);}
-.phase-realization{background:rgba(201,168,76,0.15);color:var(--gold);border:1px solid rgba(201,168,76,0.4);}
+.phase-realization{background:var(--gold-a15);color:var(--gold);border:1px solid var(--gold-a40);}
 .phase-deload{background:rgba(136,136,136,0.15);color:var(--muted);border:1px solid rgba(136,136,136,0.3);}
 
 /* ── Note bar ── */
-.note-bar{background:rgba(201,168,76,0.08);border:1px solid rgba(201,168,76,0.25);border-left:3px solid var(--gold);border-radius:4px;padding:9px 13px;font-size:13px;color:var(--gold-light);margin-bottom:1.25rem;display:flex;align-items:flex-start;gap:8px;}
+.note-bar{background:var(--gold-a08);border:1px solid var(--gold-a25);border-left:3px solid var(--gold);border-radius:4px;padding:9px 13px;font-size:13px;color:var(--gold-light);margin-bottom:1.25rem;display:flex;align-items:flex-start;gap:8px;}
 
 /* ── Week bar ── */
 .week-bar{display:flex;align-items:center;gap:10px;margin-bottom:1.5rem;flex-wrap:wrap;}
@@ -77,7 +87,7 @@ h1,h2,h3,h4{font-family:'Barlow Condensed',sans-serif;}
 .day-card-header{background:var(--dark2);padding:9px 13px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--dark3);}
 .day-name{font-family:'Barlow Condensed',sans-serif;font-size:17px;font-weight:700;letter-spacing:0.5px;}
 .day-focus-text{font-size:11px;color:var(--muted);margin-top:1px;}
-.day-vol-badge{font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:600;color:var(--gold);background:rgba(201,168,76,0.1);padding:2px 9px;border-radius:3px;border:1px solid rgba(201,168,76,0.25);}
+.day-vol-badge{font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:600;color:var(--gold);background:var(--gold-a10);padding:2px 9px;border-radius:3px;border:1px solid var(--gold-a25);}
 
 /* ── Exercise table ── */
 .ex-table{width:100%;border-collapse:collapse;}
@@ -90,7 +100,7 @@ h1,h2,h3,h4{font-family:'Barlow Condensed',sans-serif;}
 .cat-snatch{background:#C9A84C;}.cat-clean{background:#3A86D4;}.cat-squat{background:#5EC08A;}
 .cat-bench{background:#C06060;}.cat-accessory{background:#888;}.cat-plyo{background:#A07FD4;}
 .cat-core{background:#D48A50;}.cat-other{background:#444;}
-.vol-pill{display:inline-block;padding:1px 7px;border-radius:3px;font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:600;background:rgba(201,168,76,0.1);color:var(--gold);}
+.vol-pill{display:inline-block;padding:1px 7px;border-radius:3px;font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:600;background:var(--gold-a10);color:var(--gold);}
 
 /* ── Metrics ── */
 .metrics-row{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:1.5rem;}
@@ -129,7 +139,7 @@ h1,h2,h3,h4{font-family:'Barlow Condensed',sans-serif;}
 /* ── Day pills ── */
 .day-pill-row{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:.9rem;}
 .day-pill{font-family:'Barlow Condensed',sans-serif;font-size:13px;padding:5px 14px;border-radius:3px;border:1px solid var(--dark3);cursor:pointer;background:var(--dark2);color:var(--light);transition:all 0.1s;}
-.day-pill.selected{background:rgba(201,168,76,0.15);border-color:var(--gold);color:var(--gold);font-weight:600;}
+.day-pill.selected{background:var(--gold-a15);border-color:var(--gold);color:var(--gold);font-weight:600;}
 
 /* ── Programs home ── */
 .prog-home{max-width:700px;margin:0 auto;padding:2rem 0;}
@@ -149,7 +159,7 @@ h1,h2,h3,h4{font-family:'Barlow Condensed',sans-serif;}
 /* ── Complex builder ── */
 .ex-type-tabs{display:flex;gap:4px;margin-bottom:1rem;}
 .ex-type-tab{font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:600;padding:5px 14px;border-radius:3px;border:1px solid var(--dark3);cursor:pointer;background:var(--dark2);color:var(--light);transition:all 0.1s;flex:1;text-align:center;}
-.ex-type-tab.active{background:rgba(201,168,76,0.15);border-color:var(--gold);color:var(--gold);}
+.ex-type-tab.active{background:var(--gold-a15);border-color:var(--gold);color:var(--gold);}
 .complex-movement{display:grid;grid-template-columns:1fr 120px 80px 28px;gap:6px;align-items:center;margin-bottom:6px;padding:8px 10px;background:var(--dark2);border:1px solid var(--dark3);border-radius:4px;}
 .complex-movement input{background:var(--black);border:1px solid var(--dark3);border-radius:3px;padding:4px 8px;font-size:13px;color:var(--white);font-family:'Barlow',sans-serif;width:100%;}
 .complex-movement input:focus{outline:none;border-color:var(--gold);}
@@ -160,7 +170,7 @@ h1,h2,h3,h4{font-family:'Barlow Condensed',sans-serif;}
 .complex-add-btn:hover{border-color:var(--gold);color:var(--gold);}
 .complex-remove-btn{background:none;border:none;cursor:pointer;color:#555;font-size:14px;padding:0;line-height:1;transition:color 0.1s;}
 .complex-remove-btn:hover{color:#E07070;}
-.vol-preview{background:rgba(201,168,76,0.08);border:1px solid rgba(201,168,76,0.2);border-radius:4px;padding:8px 12px;font-size:12px;color:var(--gold-light);margin-top:.5rem;display:flex;justify-content:space-between;align-items:center;}
+.vol-preview{background:var(--gold-a08);border:1px solid var(--gold-a20);border-radius:4px;padding:8px 12px;font-size:12px;color:var(--gold-light);margin-top:.5rem;display:flex;justify-content:space-between;align-items:center;}
 .vol-preview strong{font-family:'Barlow Condensed',sans-serif;font-size:16px;color:var(--gold);}
 
 /* ── Empty state ── */
@@ -304,6 +314,34 @@ let state = {
   }
 };
 
+// ═══════════════════════════════════════════════════
+//  THEMES
+// ═══════════════════════════════════════════════════
+const THEMES = {
+  seminole:  { accent:'#F5821F', light:'#FFA552', dark:'#B85D0A', white:'#F5F5F0' },
+  fortmyers: { accent:'#00843D', light:'#4DAF7C', dark:'#00582A', white:'#FFFFFF' },
+  default:   { accent:'#F5821F', light:'#FFA552', dark:'#B85D0A', white:'#F5F5F0' },
+};
+let _theme = THEMES.seminole;
+
+function hexToRgba(hex, a) {
+  const r=parseInt(hex.slice(1,3),16), g=parseInt(hex.slice(3,5),16), b=parseInt(hex.slice(5,7),16);
+  return `rgba(${r},${g},${b},${a})`;
+}
+
+function applyTheme() {
+  const p = prog();
+  const org = (p?.org || '').toLowerCase();
+  _theme = org.includes('fort myers') ? THEMES.fortmyers
+         : org.includes('seminole')   ? THEMES.seminole
+         : THEMES.default;
+  const root = document.documentElement;
+  root.style.setProperty('--gold',       _theme.accent);
+  root.style.setProperty('--gold-light', _theme.light);
+  root.style.setProperty('--gold-dark',  _theme.dark);
+  root.style.setProperty('--white',      _theme.white);
+}
+
 // Charts map per program
 let charts = {};
 
@@ -385,6 +423,7 @@ function switchOrg(org) {
 //  TOP-LEVEL RENDER
 // ═══════════════════════════════════════════════════
 function render() {
+  applyTheme();
   renderProgBar();
   renderSidebar();
   renderHeaderActions();
@@ -515,7 +554,7 @@ function buildProgramHTML() {
         </div>
         <div style="display:flex;align-items:center;gap:7px;">
           <span class="day-vol-badge">${dayVol} reps</span>
-          <button onclick="openAddExercise('${day}')" style="background:rgba(201,168,76,0.12);border:1px solid rgba(201,168,76,0.3);cursor:pointer;color:var(--gold);font-size:13px;padding:2px 8px;border-radius:3px;font-family:'Barlow Condensed',sans-serif;font-weight:600;" title="Add exercise to ${day}">+ Add</button>
+          <button onclick="openAddExercise('${day}')" style="background:var(--gold-a12);border:1px solid var(--gold-a30);cursor:pointer;color:var(--gold);font-size:13px;padding:2px 8px;border-radius:3px;font-family:'Barlow Condensed',sans-serif;font-weight:600;" title="Add exercise to ${day}">+ Add</button>
           <button onclick="openEditDay('${day}')" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:13px;padding:2px 4px;" title="Edit day">✏</button>
         </div>
       </div>
@@ -627,7 +666,8 @@ function initVolumeCharts() {
   });
 
   // highlight selected week in bar charts
-  const barColors=ws.map(w=>w===vw?'#C9A84C':'rgba(201,168,76,0.35)');
+  const ac=_theme.accent, acFade=hexToRgba(ac,0.35);
+  const barColors=ws.map(w=>w===vw?ac:acFade);
   charts[pid].vol=new Chart(document.getElementById('volChart'),{
     type:'bar',
     data:{labels:ws.map(w=>'Wk '+w),datasets:[{data:ws.map(totalVol),backgroundColor:barColors,borderRadius:4,borderSkipped:false}]},
@@ -635,13 +675,12 @@ function initVolumeCharts() {
       scales:{x:{ticks:{color:'#888',autoSkip:false},grid:{color:'rgba(255,255,255,0.05)'}},y:{ticks:{color:'#888'},grid:{color:'rgba(255,255,255,0.05)'},beginAtZero:true}}}
   });
 
-  const intColors=ws.map(w=>w===vw?'#C9A84C':'rgba(201,168,76,0.35)');
   charts[pid].int=new Chart(document.getElementById('intChart'),{
     type:'line',
-    data:{labels:ws.map(w=>'Wk '+w),datasets:[{data:ws.map(avgInt),borderColor:'#C9A84C',backgroundColor:'rgba(201,168,76,0.08)',fill:true,tension:0.3,
-      pointBackgroundColor:ws.map(w=>w===vw?'#C9A84C':'rgba(201,168,76,0.4)'),
+    data:{labels:ws.map(w=>'Wk '+w),datasets:[{data:ws.map(avgInt),borderColor:ac,backgroundColor:hexToRgba(ac,0.08),fill:true,tension:0.3,
+      pointBackgroundColor:ws.map(w=>w===vw?ac:hexToRgba(ac,0.4)),
       pointRadius:ws.map(w=>w===vw?6:4),
-      pointBorderColor:ws.map(w=>w===vw?'#F2D98A':'transparent'),
+      pointBorderColor:ws.map(w=>w===vw?_theme.light:'transparent'),
       pointBorderWidth:2
     }]},
     options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
@@ -678,12 +717,13 @@ function initPeakingChart() {
   let tl='';
   for(let i=1;i<=total;i++){
     let bg,color,lbl;
-    if(i===comp){bg='rgba(201,168,76,0.25)';color='#F2D98A';lbl='🏆';}
+    const ac=_theme.accent,acL=_theme.light;
+    if(i===comp){bg=hexToRgba(ac,0.25);color=acL;lbl='🏆';}
     else if(i===comp-1){bg='rgba(136,136,136,0.15)';color='#888';lbl='↓';}
     else if(i===peakVol){bg='rgba(94,192,138,0.2)';color='#5EC08A';lbl='↑';}
-    else if(i<peakVol){bg='rgba(31,95,166,0.15)';color:'#3A86D4';lbl='';}
-    else{bg='rgba(201,168,76,0.1)';color='#C9A84C';lbl='';}
-    tl+=`<div class="tl-week" style="background:${bg};color:${color};border:${i===comp?'1px solid rgba(201,168,76,0.5)':'1px solid transparent'};"><div style="font-size:13px;">${lbl||'·'}</div><div>W${i}</div></div>`;
+    else if(i<peakVol){bg='rgba(31,95,166,0.15)';color='#3A86D4';lbl='';}
+    else{bg=hexToRgba(ac,0.1);color=ac;lbl='';}
+    tl+=`<div class="tl-week" style="background:${bg};color:${color};border:${i===comp?`1px solid ${hexToRgba(ac,0.5)}`:'1px solid transparent'};"><div style="font-size:13px;">${lbl||'·'}</div><div>W${i}</div></div>`;
   }
   document.getElementById('timeline-strip').innerHTML=tl;
 
@@ -697,13 +737,13 @@ function initPeakingChart() {
     type:'line',
     data:{labels,datasets:[
       {label:'Volume %',data:labels.map((_,i)=>vC(i+1)),borderColor:'#3A86D4',backgroundColor:'rgba(58,134,212,0.1)',fill:true,tension:0.4,pointBackgroundColor:'#3A86D4',pointRadius:4,yAxisID:'y'},
-      {label:'Intensity %',data:labels.map((_,i)=>iC(i+1)),borderColor:'#C9A84C',backgroundColor:'rgba(201,168,76,0.05)',fill:false,tension:0.4,pointBackgroundColor:'#C9A84C',pointRadius:4,borderDash:[5,3],yAxisID:'y2'}
+      {label:'Intensity %',data:labels.map((_,i)=>iC(i+1)),borderColor:_theme.accent,backgroundColor:hexToRgba(_theme.accent,0.05),fill:false,tension:0.4,pointBackgroundColor:_theme.accent,pointRadius:4,borderDash:[5,3],yAxisID:'y2'}
     ]},
     options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
       scales:{
         x:{ticks:{color:'#888',autoSkip:false},grid:{color:'rgba(255,255,255,0.05)'}},
         y:{min:0,max:115,ticks:{color:'#3A86D4',callback:v=>v+'%'},grid:{color:'rgba(255,255,255,0.05)'},title:{display:true,text:'Volume',color:'#3A86D4',font:{size:11}}},
-        y2:{position:'right',min:50,max:110,ticks:{color:'#C9A84C',callback:v=>v+'%'},grid:{drawOnChartArea:false},title:{display:true,text:'Intensity',color:'#C9A84C',font:{size:11}}}
+        y2:{position:'right',min:50,max:110,ticks:{color:_theme.accent,callback:v=>v+'%'},grid:{drawOnChartArea:false},title:{display:true,text:'Intensity',color:_theme.accent,font:{size:11}}}
       }}
   });
 }
