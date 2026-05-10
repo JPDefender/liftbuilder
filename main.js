@@ -5,9 +5,9 @@ const path = require('path');
 let mainWindow = null;
 
 // ── Auto-updater config ────────────────────────────────────────────────────
-autoUpdater.autoDownload = false;        // ask user before downloading
-autoUpdater.autoInstallOnAppQuit = true; // install on next quit if downloaded
-autoUpdater.verifyUpdateCodeSignature = false; // app is unsigned (no Apple Developer cert)
+// Only used for version detection — unsigned apps can't use Squirrel.Mac install
+autoUpdater.autoDownload = false;
+autoUpdater.verifyUpdateCodeSignature = false;
 
 autoUpdater.on('update-available', (info) => {
   mainWindow?.webContents.send('update-available', info.version);
@@ -17,23 +17,14 @@ autoUpdater.on('update-not-available', () => {
   mainWindow?.webContents.send('update-not-available');
 });
 
-autoUpdater.on('download-progress', (progress) => {
-  mainWindow?.webContents.send('update-download-progress', Math.round(progress.percent));
-});
-
-autoUpdater.on('update-downloaded', () => {
-  mainWindow?.webContents.send('update-downloaded');
-});
-
-autoUpdater.on('error', (err) => {
-  mainWindow?.webContents.send('update-error', err.message);
+autoUpdater.on('error', () => {
+  // Silently ignore — version check errors are non-critical
 });
 
 // ── IPC handlers (called from renderer via preload) ────────────────────────
-ipcMain.handle('check-for-updates', () => autoUpdater.checkForUpdates());
-ipcMain.handle('download-update',   () => autoUpdater.downloadUpdate());
-ipcMain.on('install-update',        () => setImmediate(() => autoUpdater.quitAndInstall()));
-ipcMain.handle('get-version',       () => app.getVersion());
+ipcMain.handle('check-for-updates',  () => autoUpdater.checkForUpdates());
+ipcMain.handle('open-releases-page', () => shell.openExternal('https://github.com/JPDefender/liftbuilder/releases/latest'));
+ipcMain.handle('get-version',        () => app.getVersion());
 
 // ── Window ─────────────────────────────────────────────────────────────────
 function createWindow() {
