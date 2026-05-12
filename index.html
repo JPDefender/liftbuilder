@@ -444,7 +444,22 @@ let _progSectionOpen = true;
 
 function renderSidebar() {
   const progs = Object.values(state.programs);
-  const progItems = progs.map(p => `
+
+  // Group programs by org, ungrouped last
+  const groups = {};
+  progs.forEach(p => {
+    const key = (p.org || '').trim();
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(p);
+  });
+  const orgKeys = Object.keys(groups).sort((a, b) => {
+    if (!a && b) return 1;
+    if (a && !b) return -1;
+    return a.localeCompare(b);
+  });
+  const multiOrg = orgKeys.length > 1 || (orgKeys.length === 1 && orgKeys[0] !== '');
+
+  const progRow = p => `
     <div class="prog-list-item ${p.id===state.activeProgId&&['program','volume','peaking','calendar'].includes(state.activeTab)?'active':''}" onclick="switchProgram('${p.id}')">
       <span class="pl-name">${p.name}</span>
       <span class="pl-actions">
@@ -452,7 +467,17 @@ function renderSidebar() {
         <button class="pl-btn" onclick="event.stopPropagation();openEditProgram('${p.id}')" title="Rename">✏</button>
         ${progs.length>1?`<button class="pl-btn" onclick="event.stopPropagation();deleteProgram('${p.id}')" title="Delete" style="color:#E07070;">✕</button>`:''}
       </span>
-    </div>`).join('');
+    </div>`;
+
+  let progItems = '';
+  if (multiOrg) {
+    orgKeys.forEach(org => {
+      progItems += `<div style="padding:6px 1.25rem 2px;font-family:'Barlow Condensed',sans-serif;font-size:9px;font-weight:700;letter-spacing:1.4px;color:var(--gold);text-transform:uppercase;opacity:0.85;">${org || 'No School / Sport'}</div>`;
+      progItems += groups[org].map(progRow).join('');
+    });
+  } else {
+    progItems = progs.map(progRow).join('');
+  }
 
   document.getElementById('sidebar').innerHTML = `
     <div onclick="toggleProgSection()" style="display:flex;align-items:center;justify-content:space-between;padding:.9rem 1.25rem .4rem;cursor:pointer;user-select:none;" onmouseenter="this.style.background='var(--dark2)'" onmouseleave="this.style.background=''">
