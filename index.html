@@ -3968,8 +3968,9 @@ function loadState() {
           Object.values(week.days||{}).forEach(day=>{
             if(!day.accessories) day.accessories=[];
             const toMove=[];
+            const ACC_CATS=new Set(['accessory','core','plyo','other']);
             day.exercises=(day.exercises||[]).filter(ex=>{
-              if(ex.category==='accessory'){toMove.push(ex);return false;}
+              if(ACC_CATS.has(ex.category)){toMove.push(ex);return false;}
               return true;
             });
             day.accessories=[...day.accessories,...toMove];
