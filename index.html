@@ -217,6 +217,14 @@ h1,h2,h3,h4{font-family:'Barlow Condensed',sans-serif;}
 .warmup-add-inline-btn{font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:600;color:#3A86D4;background:rgba(58,134,212,0.1);border:1px solid rgba(58,134,212,0.25);border-radius:3px;cursor:pointer;padding:2px 8px;flex-shrink:0;}
 .warmup-add-inline-btn:hover{background:rgba(58,134,212,0.2);color:#6aabf7;}
 .warmup-ex-row td{color:var(--muted)!important;font-size:12px;}
+.accessory-section{border-top:2px solid var(--dark3);}
+.accessory-header{display:flex;align-items:center;justify-content:space-between;padding:5px 13px 4px;background:rgba(94,192,138,0.07);border-bottom:1px solid rgba(94,192,138,0.12);}
+.accessory-label{font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:600;letter-spacing:.8px;text-transform:uppercase;color:#5EC08A;display:flex;align-items:center;gap:6px;flex:1;}
+.accessory-badge{font-size:10px;color:var(--muted);font-weight:400;font-family:'Barlow',sans-serif;text-transform:none;letter-spacing:0;}
+.accessory-body{background:rgba(94,192,138,0.03);}
+.accessory-add-inline-btn{font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:600;color:#5EC08A;background:rgba(94,192,138,0.1);border:1px solid rgba(94,192,138,0.25);border-radius:3px;cursor:pointer;padding:2px 8px;flex-shrink:0;}
+.accessory-add-inline-btn:hover{background:rgba(94,192,138,0.2);color:#82d4a8;}
+.accessory-ex-row td{color:var(--muted)!important;font-size:12px;}
 
 /* ── Empty state ── */
 .empty-msg{color:var(--muted);font-size:14px;padding:2rem;text-align:center;}
@@ -627,21 +635,23 @@ function buildProgramHTML() {
       :ex.setGroups&&ex.setGroups.length>1?`<span style="font-size:10px;color:var(--muted);">mixed</span>`
       :fmtPct(sg0?.intensity||ex.intensity||0,sg0?.intensityHigh||0);
     const isWarmup=section==='warmup';
+    const isAccessory=section==='accessory';
+    const isMain=!isWarmup&&!isAccessory;
     const canUp=i>0, canDown=i<totalInSection-1;
-    return `<tr class="${isWarmup?'warmup-ex-row':''}${ex.isSuperset?' superset-row':''}">
+    return `<tr class="${isWarmup?'warmup-ex-row':isAccessory?'accessory-ex-row':''}${ex.isSuperset?' superset-row':''}">
       <td style="width:24px;padding:2px 3px;">
         <div style="display:flex;flex-direction:column;gap:1px;align-items:center;">
           <button onclick="moveExercise('${ex._day}','${section}',${i},'up')" style="background:none;border:none;cursor:${canUp?'pointer':'default'};color:${canUp?'#666':'#2a2a2a'};font-size:10px;padding:0;line-height:1;" ${canUp?'':'disabled'}>▲</button>
           <button onclick="moveExercise('${ex._day}','${section}',${i},'down')" style="background:none;border:none;cursor:${canDown?'pointer':'default'};color:${canDown?'#666':'#2a2a2a'};font-size:10px;padding:0;line-height:1;" ${canDown?'':'disabled'}>▼</button>
         </div>
       </td>
-      <td style="color:${isWarmup?'var(--muted)':'var(--white)'};">${nameCell}</td>
+      <td style="color:${isMain?'var(--white)':'var(--muted)'};">${nameCell}</td>
       <td>${ex.sets}</td><td>${repsDisplay}</td>
       <td>${pctDisplay}</td>
-      ${!isWarmup?`<td><span class="vol-pill">${ex.volume}</span></td>`:`<td style="color:var(--muted);font-size:11px;">warm-up</td>`}
+      ${isMain?`<td><span class="vol-pill">${ex.volume}</span></td>`:isWarmup?`<td style="color:var(--muted);font-size:11px;">warm-up</td>`:`<td style="color:#5EC08A;font-size:11px;">accessory</td>`}
       <td style="white-space:nowrap;">
         <button onclick="openEditExercise('${ex._day}',${i},'${section}')" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:12px;padding:1px 5px;" title="Edit">✏</button>
-        ${!isWarmup?`<button onclick="openMoveToDay('${ex._day}',${i},'${section}')" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:11px;padding:1px 5px;" title="Move to another day">↷</button>`:''}
+        ${isMain?`<button onclick="openMoveToDay('${ex._day}',${i},'${section}')" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:11px;padding:1px 5px;" title="Move to another day">↷</button>`:''}
         <button onclick="deleteExercise('${ex._day}',${i},'${section}')" style="background:none;border:none;cursor:pointer;color:#555;font-size:11px;padding:1px 4px;" title="Remove">✕</button>
       </td>
     </tr>`;
@@ -650,17 +660,22 @@ function buildProgramHTML() {
   const days=trainingDays().map(day=>{
     const dd=wd?wd.days[day]:null;
     if(dd && !dd.warmup) dd.warmup=[];
+    if(dd && !dd.accessories) dd.accessories=[];
     const mainVol=dd?dd.exercises.reduce((s,e)=>s+(e.volume||0),0):0;
     const warmupArr=dd&&dd.warmup?dd.warmup:[];
     const warmupCount=warmupArr.length;
+    const accessoryArr=dd&&dd.accessories?dd.accessories:[];
+    const accessoryCount=accessoryArr.length;
     const dayNote=dd&&dd.dayNote?dd.dayNote:'';
 
     // Tag each exercise with its day so exRow can reference it
     const taggedMain=(dd?dd.exercises:[]).map(e=>({...e,_day:day}));
     const taggedWarmup=warmupArr.map(e=>({...e,_day:day}));
+    const taggedAccessory=accessoryArr.map(e=>({...e,_day:day}));
 
     const mainRows=taggedMain.map((ex,i)=>exRow(ex,i,'main',taggedMain.length)).join('');
     const warmupRows=taggedWarmup.map((ex,i)=>exRow(ex,i,'warmup',taggedWarmup.length)).join('');
+    const accessoryRows=taggedAccessory.map((ex,i)=>exRow(ex,i,'accessory',taggedAccessory.length)).join('');
 
     return `<div class="day-card">
       <div class="day-card-header">
@@ -694,6 +709,18 @@ function buildProgramHTML() {
           <tbody>${mainRows}</tbody>
         </table>`:`<div class="empty-msg" style="padding:.75rem 1rem;font-size:13px;cursor:pointer;" onclick="openAddExercise('${day}','main')">No working exercises — <span style="color:var(--gold);">+ Add one</span></div>`}
       </div>
+      <div class="accessory-section">
+        <div class="accessory-header">
+          <div class="accessory-label">💪 Accessories <span class="accessory-badge">${accessoryCount?accessoryCount+' exercise'+(accessoryCount>1?'s':''):''} <span style="opacity:0.6;">— not counted in volume</span></span></div>
+          <button onclick="openAddExercise('${day}','accessory')" class="accessory-add-inline-btn">+ Add</button>
+        </div>
+        <div class="accessory-body">
+          ${accessoryRows?`<table class="ex-table">
+            <thead><tr><th style="width:20px;"></th><th>Exercise</th><th>Sets</th><th>Reps</th><th>%1RM</th><th></th><th></th></tr></thead>
+            <tbody>${accessoryRows}</tbody>
+          </table>`:`<button onclick="openAddExercise('${day}','accessory')" style="display:block;width:100%;padding:8px 13px;background:none;border:none;border-top:1px dashed rgba(94,192,138,0.2);cursor:pointer;text-align:left;font-size:12px;color:#5EC08A;font-family:'Barlow Condensed',sans-serif;font-weight:600;">+ Add accessory exercise</button>`}
+        </div>
+      </div>
     </div>`;
   }).join('');
 
@@ -713,7 +740,7 @@ function confirmDeleteWeek() {
 
 function moveExercise(day, section, idx, dir) {
   const wd=getWeek(state.currentWeek); if(!wd) return;
-  const arr=section==='warmup'?(wd.days[day].warmup||[]):wd.days[day].exercises;
+  const arr=section==='warmup'?(wd.days[day].warmup||[]):section==='accessory'?(wd.days[day].accessories||[]):wd.days[day].exercises;
   const newIdx=dir==='up'?idx-1:idx+1;
   if(newIdx<0||newIdx>=arr.length) return;
   [arr[idx],arr[newIdx]]=[arr[newIdx],arr[idx]];
@@ -739,9 +766,9 @@ function openMoveToDay(fromDay, idx, section) {
 function confirmMoveToDay(fromDay, idx, section) {
   const toDay=document.getElementById('move-day').value;
   const wd=getWeek(state.currentWeek); if(!wd) return;
-  const srcArr=section==='warmup'?(wd.days[fromDay].warmup||[]):wd.days[fromDay].exercises;
+  const srcArr=section==='warmup'?(wd.days[fromDay].warmup||[]):section==='accessory'?(wd.days[fromDay].accessories||[]):wd.days[fromDay].exercises;
   const [ex]=srcArr.splice(idx,1);
-  if(!wd.days[toDay]) wd.days[toDay]={focus:'',mobility:'',dayNote:'',exercises:[],warmup:[]};
+  if(!wd.days[toDay]) wd.days[toDay]={focus:'',mobility:'',dayNote:'',exercises:[],warmup:[],accessories:[]};
   if(!wd.days[toDay].exercises) wd.days[toDay].exercises=[];
   wd.days[toDay].exercises.push(ex);
   closeModal(); saveState(); renderMain();
@@ -750,7 +777,7 @@ function confirmMoveToDay(fromDay, idx, section) {
 function deleteExercise(day, idx, section='main') {
   const wd=getWeek(state.currentWeek);
   if(wd&&wd.days[day]){
-    const arr=section==='warmup'?(wd.days[day].warmup||[]):wd.days[day].exercises;
+    const arr=section==='warmup'?(wd.days[day].warmup||[]):section==='accessory'?(wd.days[day].accessories||[]):wd.days[day].exercises;
     arr.splice(idx,1);
     renderMain();
   }
@@ -1176,10 +1203,11 @@ function buildPDF(weekNums, inclMobility) {
     let ey = cy + 24;
     const maxTxtW = colW - 11;
 
-    // Merge warmup into exercises with section tagging
+    // Merge warmup + accessories into exercises with section tagging
     const allEx = [
-      ...(dd?.exercises || []).map(e => ({...e, _wu: false})),
-      ...(dd?.warmup    || []).map(e => ({...e, _wu: true})),
+      ...(dd?.exercises    || []).map(e => ({...e, _wu: false, _acc: false})),
+      ...(dd?.warmup       || []).map(e => ({...e, _wu: true,  _acc: false})),
+      ...(dd?.accessories  || []).map(e => ({...e, _wu: false, _acc: true})),
     ];
 
     if (!allEx.length) {
@@ -1189,6 +1217,7 @@ function buildPDF(weekNums, inclMobility) {
     }
 
     let shownWuLabel = false;
+    let shownAccLabel = false;
 
     allEx.forEach((ex, idx) => {
       // Warm-up section divider
@@ -1199,6 +1228,17 @@ function buildPDF(weekNums, inclMobility) {
         doc.text('— WARM-UP —', cx + colW/2, ey + 7, { align: 'center' });
         ey += 11;
         doc.setDrawColor(80,140,200); doc.setLineWidth(0.3);
+        doc.line(cx+2, ey, cx+colW-2, ey);
+        ey += 3;
+      }
+      // Accessory section divider
+      if (ex._acc && !shownAccLabel) {
+        shownAccLabel = true;
+        if (ey + 12 > cy + colH) return;
+        doc.setFontSize(6); doc.setFont('helvetica','bold'); doc.setTextColor(80,180,130);
+        doc.text('— ACCESSORIES —', cx + colW/2, ey + 7, { align: 'center' });
+        ey += 11;
+        doc.setDrawColor(80,180,130); doc.setLineWidth(0.3);
         doc.line(cx+2, ey, cx+colW-2, ey);
         ey += 3;
       }
@@ -1267,7 +1307,7 @@ function buildPDF(weekNums, inclMobility) {
           if (sgY + 7 > cy + colH) return;
           const isTop = ex.scheme==='ladder' && si===ex.setGroups.length-1;
           doc.setFontSize(6); doc.setFont('helvetica', isTop?'bold':'normal');
-          doc.setTextColor(isTop?[100,80,20]:MID);
+          doc.setTextColor(...(isTop?[100,80,20]:MID));
           const sgTxt = `${sg.sets}×${ex.useTime?sg.seconds+'s':sg.reps+'r'} @ ${pdfPct(sg.intensity||0, sg.intensityHigh||0)}${isTop?' ▲':''}`;
           doc.text(sgTxt, cx + 9, sgY + 7);
         });
@@ -1275,7 +1315,7 @@ function buildPDF(weekNums, inclMobility) {
       } else {
         // Standard single exercise
         doc.setFontSize(7.5);
-        doc.setFont('helvetica', ex._wu ? 'italic' : 'normal');
+        doc.setFont('helvetica', (ex._wu||ex._acc) ? 'italic' : 'normal');
         doc.setTextColor(...BLACK);
         doc.text(doc.splitTextToSize(ex.name, maxTxtW)[0], cx + 9, ey + 8);
         const sg0 = ex.setGroups?.[0];
@@ -1291,7 +1331,7 @@ function buildPDF(weekNums, inclMobility) {
         if (ex.scheme && ex.scheme!=='normal') {
           const tag = ex.scheme==='amrap'?'AMRAP':ex.scheme==='heavy_single'?'HEAVY':' LADDER';
           doc.setFontSize(5.5); doc.setFont('helvetica','bold');
-          doc.setTextColor(ex.scheme==='amrap'?[200,60,60]:ex.scheme==='heavy_single'?[180,145,20]:[80,160,80]);
+          doc.setTextColor(...(ex.scheme==='amrap'?[200,60,60]:ex.scheme==='heavy_single'?[180,145,20]:[80,160,80]));
           doc.text(tag, cx + colW - 4, ey + 8, { align:'right' });
         }
       }
@@ -1418,7 +1458,7 @@ function saveNewProgram() {
   const season=document.getElementById('np-season').value.trim();
   const id=newProgId();
   const week1days={};
-  days.forEach(d=>{week1days[d]={focus:'',mobility:'',dayNote:'',exercises:[],warmup:[]};});
+  days.forEach(d=>{week1days[d]={focus:'',mobility:'',dayNote:'',exercises:[],warmup:[],accessories:[]};});
   state.programs[id]={id,name,org,season,trainingDays:days,weeks:{1:{note:'',phase:'accumulation',days:week1days}}};
   state.activeProgId=id;
   state.currentWeek=1;
@@ -1493,7 +1533,7 @@ function saveManageDays() {
   if(!days.length){alert('Select at least one training day.');return;}
   prog().trainingDays=days;
   const wd=getWeek(state.currentWeek);
-  if(wd) days.forEach(d=>{if(!wd.days[d]) wd.days[d]={focus:'',mobility:'',dayNote:'',exercises:[],warmup:[]};});
+  if(wd) days.forEach(d=>{if(!wd.days[d]) wd.days[d]={focus:'',mobility:'',dayNote:'',exercises:[],warmup:[],accessories:[]};});
   closeModal(); render();
 }
 
@@ -1502,7 +1542,7 @@ function saveManageDays() {
 // ═══════════════════════════════════════════════════
 function openEditDay(day) {
   const wd=getWeek(state.currentWeek); if(!wd) return;
-  if(!wd.days[day]) wd.days[day]={focus:'',mobility:'',dayNote:'',exercises:[],warmup:[]};
+  if(!wd.days[day]) wd.days[day]={focus:'',mobility:'',dayNote:'',exercises:[],warmup:[],accessories:[]};
   const dd=wd.days[day];
   document.getElementById('modal-body').innerHTML=`
     <h3>Edit — ${day}</h3>
@@ -1563,7 +1603,7 @@ function saveNewWeek() {
   const note=document.getElementById('m-note').value.trim();
   if(!w) return;
   const days={};
-  trainingDays().forEach(d=>{days[d]={focus:'',mobility:'',dayNote:'',exercises:[],warmup:[]};});
+  trainingDays().forEach(d=>{days[d]={focus:'',mobility:'',dayNote:'',exercises:[],warmup:[],accessories:[]};});
   prog().weeks[w]={note,phase,days};
   state.currentWeek=w;
   closeModal(); render();
@@ -1573,7 +1613,7 @@ function saveNewWeek() {
 //  ADD EXERCISE (with complex builder)
 // ═══════════════════════════════════════════════════
 let _exMode = 'single'; // 'single' | 'complex'
-let _exSection = 'main'; // 'main' | 'warmup'
+let _exSection = 'main'; // 'main' | 'warmup' | 'accessory'
 let _libraryMode = false; // true = modal is adding/editing a library entry (not a day's exercise)
 let _libraryEditIdx = -1; // index into state.exerciseLibrary when editing an existing entry
 let _movements = []; // [{name, reps, category}]
@@ -1612,6 +1652,7 @@ function openAddExercise(preDay, section='main') {
         <select id="m-section" onchange="_exSection=this.value">
           <option value="main" ${section==='main'?'selected':''}>Working sets</option>
           <option value="warmup" ${section==='warmup'?'selected':''}>Warm-up (not counted in volume)</option>
+          <option value="accessory" ${section==='accessory'?'selected':''}>Accessory (not counted in volume)</option>
         </select>
       </div>
     </div>
@@ -2032,6 +2073,9 @@ function saveExercise() {
   if(_exSection==='warmup') {
     if(!wd.days[day].warmup) wd.days[day].warmup=[];
     wd.days[day].warmup.push(ex);
+  } else if(_exSection==='accessory') {
+    if(!wd.days[day].accessories) wd.days[day].accessories=[];
+    wd.days[day].accessories.push(ex);
   } else {
     wd.days[day].exercises.push(ex);
   }
@@ -2043,7 +2087,7 @@ function saveExercise() {
 // ═══════════════════════════════════════════════════
 function openEditExercise(day, idx, section='main') {
   const wd=getWeek(state.currentWeek); if(!wd) return;
-  const srcArr=section==='warmup'?(wd.days[day]?.warmup||[]):wd.days[day]?.exercises;
+  const srcArr=section==='warmup'?(wd.days[day]?.warmup||[]):section==='accessory'?(wd.days[day]?.accessories||[]):wd.days[day]?.exercises;
   const ex=srcArr?srcArr[idx]:null; if(!ex) return;
   const days=trainingDays();
   _exSection=section;
@@ -2076,6 +2120,7 @@ function openEditExercise(day, idx, section='main') {
         <select id="m-section" onchange="_exSection=this.value">
           <option value="main" ${section==='main'?'selected':''}>Working sets</option>
           <option value="warmup" ${section==='warmup'?'selected':''}>Warm-up</option>
+          <option value="accessory" ${section==='accessory'?'selected':''}>Accessory</option>
         </select>
       </div>
     </div>
@@ -2155,11 +2200,11 @@ function saveEditExercise(day, idx, section='main') {
   }
 
   // Remove from source array
-  const srcArr=section==='warmup'?(wd.days[day].warmup||[]):wd.days[day].exercises;
+  const srcArr=section==='warmup'?(wd.days[day].warmup||[]):section==='accessory'?(wd.days[day].accessories||[]):wd.days[day].exercises;
   srcArr.splice(idx,1);
   // Insert into destination
-  if(!wd.days[newDay]) wd.days[newDay]={focus:'',mobility:'',dayNote:'',exercises:[],warmup:[]};
-  const destArr=newSection==='warmup'?(wd.days[newDay].warmup||(wd.days[newDay].warmup=[])):wd.days[newDay].exercises;
+  if(!wd.days[newDay]) wd.days[newDay]={focus:'',mobility:'',dayNote:'',exercises:[],warmup:[],accessories:[]};
+  const destArr=newSection==='warmup'?(wd.days[newDay].warmup||(wd.days[newDay].warmup=[])):newSection==='accessory'?(wd.days[newDay].accessories||(wd.days[newDay].accessories=[])):wd.days[newDay].exercises;
   if(newDay===day && newSection===section) {
     destArr.splice(idx,0,ex); // preserve position when staying in same place
   } else {
@@ -3793,7 +3838,7 @@ function applyTemplate(idx) {
       days = JSON.parse(JSON.stringify(tw.days));
     } else {
       (tpl.trainingDays||p.trainingDays).forEach(d=>{
-        days[d]={focus:'',mobility:'',dayNote:'',exercises:[],warmup:[]};
+        days[d]={focus:'',mobility:'',dayNote:'',exercises:[],warmup:[],accessories:[]};
       });
     }
     p.weeks[wNum]={note:tw.note||'',phase:tw.phase,days};
@@ -3917,6 +3962,20 @@ function loadState() {
       if (payload.exerciseLibrary) state.exerciseLibrary = payload.exerciseLibrary;
       if (payload.meets) state.meets = payload.meets;
       if (payload.weightUnit) state.weightUnit = payload.weightUnit;
+      // Migrate: move accessory-category exercises from exercises[] to accessories[]
+      Object.values(state.programs).forEach(prog=>{
+        Object.values(prog.weeks||{}).forEach(week=>{
+          Object.values(week.days||{}).forEach(day=>{
+            if(!day.accessories) day.accessories=[];
+            const toMove=[];
+            day.exercises=(day.exercises||[]).filter(ex=>{
+              if(ex.category==='accessory'){toMove.push(ex);return false;}
+              return true;
+            });
+            day.accessories=[...day.accessories,...toMove];
+          });
+        });
+      });
       return true;
     }
   } catch(e) {
