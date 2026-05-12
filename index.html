@@ -2352,7 +2352,7 @@ function loadAthleteIntoCalc() {
   const a = (state.roster.athletes||[]).find(a=>(a.id||a.name)===val);
   if (!a) return;
   const unit = state.weightUnit;
-  const conv = unit==='lbs' ? 2.20462 : 1;
+  const conv = unit==='kg' ? (1/2.20462) : 1;  // stored as lbs; convert to kg if needed
   ['snatch','cj','fsq','bsq'].forEach(k => {
     const el = document.getElementById('calc-'+k);
     if (el) { const raw = a[k]||0; el.value = raw ? Math.round(raw*conv) : ''; }
@@ -2432,7 +2432,7 @@ function loadAthleteIntoAttempts() {
   const sel = document.getElementById('att-athlete'); if (!sel) return;
   const a = (state.roster.athletes||[]).find(a=>(a.id||a.name)===sel.value);
   if (!a) return;
-  const conv = state.weightUnit==='lbs' ? 2.20462 : 1;
+  const conv = state.weightUnit==='kg' ? (1/2.20462) : 1;  // stored as lbs
   const sEl = document.getElementById('att-snatch');
   const cEl = document.getElementById('att-cj');
   const bEl = document.getElementById('att-bench');
@@ -2560,6 +2560,7 @@ function buildMeetDetailHTML(meet) {
     const bestBench  = bn.reduce((best,w,i)=>bm[i]===true&&w>best?w:best, 0);
     const total      = bestSnatch&&bestCJ ? bestSnatch+bestCJ : 0;
     const tradTotal  = bestCJ&&bestBench  ? bestCJ+bestBench  : 0;
+    const div        = entry.division||'';
 
     function attCell(lift, idx) {
       const arr  = lift==='s'?sn:lift==='c'?cj:bn;
@@ -2583,10 +2584,18 @@ function buildMeetDetailHTML(meet) {
       </td>`;
     }
 
+    const divColor = {OLY:'#C9A84C',Traditional:'#A87FD4',Both:'#5EC08A',Exhibition:'#3A86D4'}[div]||'var(--muted)';
     return `<tr style="border-bottom:1px solid var(--dark3);">
       <td style="padding:8px 10px;border-right:1px solid var(--dark3);">
         <div style="font-weight:600;color:var(--white);font-size:13px;">${ath.name}</div>
         ${ath.wc?`<div style="font-size:11px;color:var(--muted);">${ath.wc} lbs</div>`:''}
+      </td>
+      <td style="padding:4px 8px;text-align:center;border-right:1px solid var(--dark3);">
+        <select onchange="updateMeetDivision('${meet.id}',${ei},this.value)"
+          style="background:var(--dark2);border:1px solid var(--dark3);color:${divColor};border-radius:3px;padding:3px 6px;font-size:11px;font-family:'Barlow Condensed',sans-serif;font-weight:700;cursor:pointer;">
+          <option value="" ${!div?'selected':''}>—</option>
+          ${['OLY','Traditional','Both','Exhibition'].map(d=>`<option value="${d}" ${div===d?'selected':''}>${d}</option>`).join('')}
+        </select>
       </td>
       ${attCell('s',0)}${attCell('s',1)}${attCell('s',2)}
       ${attCell('c',0)}${attCell('c',1)}${attCell('c',2)}
@@ -2622,6 +2631,7 @@ function buildMeetDetailHTML(meet) {
         </select>
         <button class="btn btn-gold" onclick="addMeetEntry('${meet.id}')" style="font-size:12px;padding:5px 12px;">+ Add</button>`:
         '<span style="font-size:12px;color:var(--muted);">All athletes added</span>'}
+        ${entries.length?`<button onclick="exportMeetRosterCSV('${meet.id}')" class="btn btn-outline" style="font-size:11px;padding:4px 10px;">⬇ Export Roster</button>`:''}
         <div style="display:flex;background:var(--dark2);border:1px solid var(--dark3);border-radius:4px;overflow:hidden;">
           <button onclick="state.weightUnit='lbs';saveState();renderMain();" style="padding:4px 10px;border:none;cursor:pointer;font-size:11px;font-weight:600;font-family:'Barlow Condensed',sans-serif;background:${unit==='lbs'?'var(--dark3)':'transparent'};color:${unit==='lbs'?'var(--white)':'var(--muted)'};">LBS</button>
           <button onclick="state.weightUnit='kg';saveState();renderMain();" style="padding:4px 10px;border:none;cursor:pointer;font-size:11px;font-weight:600;font-family:'Barlow Condensed',sans-serif;background:${unit==='kg'?'var(--dark3)':'transparent'};color:${unit==='kg'?'var(--white)':'var(--muted)'};">KG</button>
@@ -2633,6 +2643,7 @@ function buildMeetDetailHTML(meet) {
       <thead>
         <tr style="background:var(--dark2);">
           <th style="padding:8px 10px;text-align:left;font-family:'Barlow Condensed',sans-serif;font-size:10px;letter-spacing:1px;color:var(--muted);border-right:1px solid var(--dark3);border-bottom:1px solid var(--dark3);">ATHLETE</th>
+          <th style="padding:8px 10px;text-align:center;font-family:'Barlow Condensed',sans-serif;font-size:10px;letter-spacing:1px;color:var(--muted);border-right:1px solid var(--dark3);border-bottom:1px solid var(--dark3);">DIVISION</th>
           <th colspan="3" style="padding:8px 10px;text-align:center;font-family:'Barlow Condensed',sans-serif;font-size:10px;letter-spacing:1px;color:#C9A84C;border-right:1px solid var(--dark3);border-bottom:1px solid var(--dark3);">SNATCH</th>
           <th colspan="3" style="padding:8px 10px;text-align:center;font-family:'Barlow Condensed',sans-serif;font-size:10px;letter-spacing:1px;color:#3A86D4;border-right:1px solid var(--dark3);border-bottom:1px solid var(--dark3);">CLEAN &amp; JERK</th>
           <th colspan="3" style="padding:8px 10px;text-align:center;font-family:'Barlow Condensed',sans-serif;font-size:10px;letter-spacing:1px;color:#A87FD4;border-right:1px solid var(--dark3);border-bottom:1px solid var(--dark3);">BENCH</th>
@@ -2642,6 +2653,7 @@ function buildMeetDetailHTML(meet) {
           <th style="border-bottom:1px solid var(--dark3);"></th>
         </tr>
         <tr style="background:var(--dark2);">
+          <th style="border-right:1px solid var(--dark3);border-bottom:1px solid var(--dark3);"></th>
           <th style="border-right:1px solid var(--dark3);border-bottom:1px solid var(--dark3);"></th>
           ${['1st','2nd','3rd'].map(l=>`<th style="padding:5px 4px;text-align:center;font-family:'Barlow Condensed',sans-serif;font-size:10px;color:var(--muted);border-right:1px solid var(--dark3);border-bottom:1px solid var(--dark3);">${l}</th>`).join('')}
           ${['1st','2nd','3rd'].map(l=>`<th style="padding:5px 4px;text-align:center;font-family:'Barlow Condensed',sans-serif;font-size:10px;color:var(--muted);border-right:1px solid var(--dark3);border-bottom:1px solid var(--dark3);">${l}</th>`).join('')}
@@ -2717,7 +2729,7 @@ function addMeetEntry(meetId) {
   const sel = document.getElementById('add-entry-sel'); if(!sel||!sel.value) return;
   const meet = (state.meets||[]).find(m=>m.id===meetId); if(!meet) return;
   if (!meet.entries) meet.entries=[];
-  meet.entries.push({athleteId:sel.value, snatchAttempts:[null,null,null], cjAttempts:[null,null,null], benchAttempts:[null,null,null], snatchMade:[null,null,null], cjMade:[null,null,null], benchMade:[null,null,null]});
+  meet.entries.push({athleteId:sel.value, division:'', snatchAttempts:[null,null,null], cjAttempts:[null,null,null], benchAttempts:[null,null,null], snatchMade:[null,null,null], cjMade:[null,null,null], benchMade:[null,null,null]});
   saveState(); renderMain();
 }
 
@@ -2742,21 +2754,45 @@ function updateMeetAttempt(meetId, entryIdx, lift, attIdx, field, value) {
     if (field==='weight') entry.benchAttempts[attIdx]=parseFloat(value)||null;
     else entry.benchMade[attIdx]=value;
   }
-  // If a made attempt is a new PR, update the athlete's roster max
+  // If a made attempt is a new PR, update the athlete's roster max (always stored in lbs)
   if (field==='made' && value===true) {
     const liftMap = {s:['snatchAttempts','snatch'], c:['cjAttempts','cj'], b:['benchAttempts','bench']};
     const [attKey, rosterKey] = liftMap[lift]||[];
     if (attKey) {
       const w = entry[attKey]?.[attIdx];
       if (w) {
+        const wLbs = state.weightUnit==='kg' ? Math.round(w*2.20462) : w;
         const ath = (state.roster.athletes||[]).find(a=>(a.id||a.name)===entry.athleteId);
-        if (ath && w > (ath[rosterKey]||0)) {
-          ath[rosterKey] = w;
+        if (ath && wLbs > (ath[rosterKey]||0)) {
+          ath[rosterKey] = wLbs;
         }
       }
     }
   }
   saveState();
+}
+
+function updateMeetDivision(meetId, entryIdx, value) {
+  const meet = (state.meets||[]).find(m=>m.id===meetId); if(!meet) return;
+  const entry = meet.entries[entryIdx]; if(!entry) return;
+  entry.division = value;
+  saveState();
+}
+
+function exportMeetRosterCSV(meetId) {
+  const meet = (state.meets||[]).find(m=>m.id===meetId); if(!meet) return;
+  const athletes = state.roster.athletes||[];
+  const rows = [['Name','Weight Class','Division']];
+  (meet.entries||[]).forEach(entry=>{
+    const ath = athletes.find(a=>(a.id||a.name)===entry.athleteId)||{name:entry.athleteId,wc:''};
+    rows.push([ath.name, ath.wc||'', entry.division||'']);
+  });
+  const csv = rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob = new Blob([csv],{type:'text/csv'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href=url; a.download=`${meet.name.replace(/[^a-z0-9]/gi,'_')}_roster.csv`;
+  a.click(); URL.revokeObjectURL(url);
 }
 
 function getDefaultLibrary() {
@@ -2904,8 +2940,9 @@ function buildLibraryHTML() {
 }
 
 // Roster filter state
-let _rosterFilter = { gender:'', wc:'', team:'' };
-let _rosterSort   = { field:'name', dir:1 };
+let _rosterFilter  = { gender:'', wc:'', team:'' };
+let _rosterSort    = { field:'name', dir:1 };
+let _rosterSel     = new Set(); // set of athlete names (keys) currently selected
 
 function buildRosterHTML() {
   const athletes = state.roster.athletes || [];
@@ -2955,7 +2992,12 @@ function buildRosterHTML() {
     const realIdx = state.roster.athletes.indexOf(a);
     const ot=athleteOlympicTotal(a), tt=athleteTraditionalTotal(a);
     const extraCells = fields.filter(f=>!['snatch','cj','bench'].includes(f.id)).map(f=>`<td style="text-align:center;color:var(--muted);padding:7px 10px;">${a[f.id]||'—'}</td>`).join('');
-    return `<tr style="border-bottom:1px solid var(--dark3);" onmouseenter="this.style.background='var(--dark2)'" onmouseleave="this.style.background=''">
+    const athKey = a.id||a.name;
+    const isSel = _rosterSel.has(athKey);
+    return `<tr style="border-bottom:1px solid var(--dark3);background:${isSel?'var(--gold-a15)':''};" onmouseenter="this.style.background='${isSel?'var(--gold-a15)':'var(--dark2)'}'" onmouseleave="this.style.background='${isSel?'var(--gold-a15)':''}'">
+      <td style="padding:7px 10px;text-align:center;">
+        <input type="checkbox" ${isSel?'checked':''} onchange="rosterToggleOne('${athKey.replace(/'/g,"\\'")}',this.checked)" style="cursor:pointer;">
+      </td>
       <td style="padding:7px 10px;font-weight:500;">${a.name}</td>
       <td style="text-align:center;padding:7px 10px;color:var(--muted);">${a.gender||'—'}</td>
       <td style="text-align:center;padding:7px 10px;color:var(--muted);">${a.wc||'—'}</td>
@@ -2986,7 +3028,7 @@ function buildRosterHTML() {
       <button onclick="openAddAthlete()" class="btn btn-gold" style="font-size:13px;">+ Add athlete</button>
       <span style="font-size:13px;color:var(--muted);margin-left:4px;">${athletes.length} athlete${athletes.length!==1?'s':''}</span>
     </div>
-    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:1.25rem;align-items:center;">
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:${_rosterSel.size?'0':'1.25rem'};align-items:center;">
       <select onchange="_rosterFilter.gender=this.value;renderMain()" style="background:var(--dark2);color:var(--white);border:1px solid var(--dark3);border-radius:4px;padding:5px 10px;font-size:13px;font-family:'Barlow',sans-serif;">
         <option value="">All genders</option>
         ${genders.map(g=>`<option value="${g}" ${_rosterFilter.gender===g?'selected':''}>${g}</option>`).join('')}
@@ -3001,9 +3043,20 @@ function buildRosterHTML() {
       </select>
       <button onclick="exportRosterPDF()" class="btn btn-outline" style="font-size:12px;padding:5px 12px;margin-left:auto;">⬇ Export roster PDF</button>
     </div>
+    ${_rosterSel.size?`<div style="display:flex;align-items:center;gap:10px;padding:8px 14px;margin-bottom:1.25rem;background:var(--dark2);border:1px solid var(--gold-a30);border-radius:5px;">
+      <span style="font-size:13px;color:var(--gold);font-weight:600;">${_rosterSel.size} selected</span>
+      <div style="flex:1;"></div>
+      <button onclick="deleteSelectedAthletes()" class="btn btn-outline" style="font-size:12px;padding:4px 12px;color:#E07070;border-color:#E07070;">🗑 Delete</button>
+      <button onclick="openAddSelectionToMeet()" class="btn btn-gold" style="font-size:12px;padding:4px 12px;">+ Add to Meet</button>
+      <button onclick="_rosterSel.clear();renderMain();" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:12px;padding:4px 8px;">✕ Clear</button>
+    </div>`:''}
     <div class="chart-card" style="padding:0;overflow-x:auto;">
       <table style="width:100%;border-collapse:collapse;min-width:800px;">
         <thead><tr>
+          <th style="padding:7px 10px;background:var(--dark2);border-bottom:1px solid var(--dark3);width:32px;text-align:center;">
+            <input type="checkbox" ${_rosterSel.size===filtered.length&&filtered.length>0?'checked':''}
+              onchange="rosterToggleAll(this.checked)" style="cursor:pointer;">
+          </th>
           ${sortBtn('name','Name')}
           <th style="padding:7px 10px;font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--muted);text-align:center;background:var(--dark2);border-bottom:1px solid var(--dark3);">Gender</th>
           ${sortBtn('wc','WT Class (lbs)')}
@@ -3105,16 +3158,16 @@ function parseCSV(text) {
 function detectRosterColumns(headers) {
   const find=(...keys)=>headers.findIndex(h=>keys.some(k=>h===k||h.includes(k)));
   return {
-    name:      find('name','athlete','full name','athlete name'),
-    firstName: find('first name','firstname','first'),
-    lastName:  find('last name','lastname','last'),
-    gender:    find('gender','sex','m/f'),
-    wc:        find('weight class','wc','class','weight'),
-    team:      find('team','school','org','club'),
-    gradYear:  find('grad year','graduation','class year','year','grade'),
+    name:      find('full name','athlete name','athlete','name'),
+    firstName: find('first name','firstname','fname','first'),
+    lastName:  find('last name','lastname','lname','last'),
+    gender:    find('gender','sex','m/f','male/female'),
+    wc:        find('weight class','wt class','wt. class','wt.class','wc'),
+    team:      find('team','school','org','club','program'),
+    gradYear:  find('grad year','graduation year','class year','class of','grad yr','graduation','gradyear','grad'),
     snatch:    find('snatch'),
-    cj:        find('c&j','cj','clean jerk','clean & jerk','clean and jerk','clean/jerk'),
-    bench:     find('bench','bench press'),
+    cj:        find('clean & jerk','clean and jerk','clean/jerk','clean jerk','c&j','c & j','cj'),
+    bench:     find('bench press','bench'),
   };
 }
 
@@ -3181,17 +3234,19 @@ function renderCSVPreview(headers,rows,cols) {
       '— not found'
     }</td>
   </tr>`).join('');
+  const detectedLabels = detected.map(f=>f.key==='name'?'Name':f.label);
   const sampleRows=valid.slice(0,5).map(r=>{
     const name=cols.firstName>=0&&cols.lastName>=0?(r[cols.firstName]||'')+' '+(r[cols.lastName]||''):cols.name>=0?r[cols.name]||'':'?';
-    const parts=[name.trim(),cols.gender>=0?r[cols.gender]||'':'',cols.wc>=0?r[cols.wc]||'':'',cols.snatch>=0?r[cols.snatch]||'':'',cols.cj>=0?r[cols.cj]||'':''];
-    return `<tr>${parts.map(p=>`<td style="padding:3px 8px;font-size:11px;color:var(--light);">${p}</td>`).join('')}</tr>`;
+    const cells=[name.trim()];
+    detected.filter(f=>f.key!=='name').forEach(f=>{ cells.push(f.idx>=0?r[f.idx]||'':''); });
+    return `<tr>${cells.map(p=>`<td style="padding:3px 8px;font-size:11px;color:var(--light);">${p}</td>`).join('')}</tr>`;
   }).join('');
   preview.innerHTML=`
     <div style="margin-top:1rem;">
       <div style="font-size:12px;font-weight:600;color:var(--gold);margin-bottom:6px;">Detected ${valid.length} athlete${valid.length!==1?'s':''} — column mapping:</div>
       <table style="width:100%;border-collapse:collapse;margin-bottom:1rem;"><tbody>${mappingRows}</tbody></table>
       <div style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:4px;">Preview (first ${Math.min(5,valid.length)}):</div>
-      <table style="width:100%;border-collapse:collapse;"><thead><tr>${['Name','Gender','WC','Snatch','C&J'].map(h=>`<th style="padding:3px 8px;font-size:10px;color:var(--muted);text-align:left;">${h}</th>`).join('')}</tr></thead><tbody>${sampleRows}</tbody></table>
+      <table style="width:100%;border-collapse:collapse;"><thead><tr>${detectedLabels.map(h=>`<th style="padding:3px 8px;font-size:10px;color:var(--muted);text-align:left;">${h}</th>`).join('')}</tr></thead><tbody>${sampleRows}</tbody></table>
     </div>`;
   actions.innerHTML=`
     <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
@@ -3219,13 +3274,17 @@ function confirmImportRoster() {
       bench:  cols.bench>=0?(parseInt(r[cols.bench])||0):0,
     };
     if(!state.roster.athletes) state.roster.athletes=[];
-    // Skip exact duplicate names
-    if(!state.roster.athletes.find(ex=>ex.name.toLowerCase()===a.name.toLowerCase())){
+    const existing = state.roster.athletes.find(ex=>ex.name.toLowerCase()===a.name.toLowerCase());
+    if (existing) {
+      // Update existing athlete with any non-zero imported values
+      Object.keys(a).forEach(k=>{ if(k!=='name' && a[k]) existing[k]=a[k]; });
+      skipped++;
+    } else {
       state.roster.athletes.push(a); added++;
-    } else { skipped++; }
+    }
   });
   closeModal(); saveState(); renderMain();
-  if(skipped>0) alert(`Imported ${added} athlete${added!==1?'s':''}. ${skipped} skipped (duplicate names or empty rows).`);
+  if(skipped>0) alert(`Added ${added} new athlete${added!==1?'s':''}. Updated ${skipped} existing athlete${skipped!==1?'s':''}`);
 }
 
 function openAddAthlete() {
@@ -3300,7 +3359,86 @@ function clearRoster() {
   const n = (state.roster.athletes||[]).length;
   if(!confirm(`Delete all ${n} athlete${n!==1?'s':''} from the roster? This cannot be undone.`)) return;
   state.roster.athletes = [];
+  _rosterSel.clear();
   saveState(); renderMain();
+}
+
+function rosterToggleOne(key, checked) {
+  if(checked) _rosterSel.add(key); else _rosterSel.delete(key);
+  renderMain();
+}
+
+function rosterToggleAll(checked) {
+  const athletes = state.roster.athletes||[];
+  const _rosterFilter_local = _rosterFilter;
+  const filtered = athletes.filter(a=>{
+    if(_rosterFilter_local.gender && a.gender!==_rosterFilter_local.gender) return false;
+    if(_rosterFilter_local.wc && a.wc!==_rosterFilter_local.wc) return false;
+    if(_rosterFilter_local.team && a.team!==_rosterFilter_local.team) return false;
+    return true;
+  });
+  if(checked) filtered.forEach(a=>_rosterSel.add(a.id||a.name));
+  else filtered.forEach(a=>_rosterSel.delete(a.id||a.name));
+  renderMain();
+}
+
+function deleteSelectedAthletes() {
+  const n = _rosterSel.size;
+  if(!n) return;
+  if(!confirm(`Delete ${n} selected athlete${n!==1?'s':''}? This cannot be undone.`)) return;
+  state.roster.athletes = (state.roster.athletes||[]).filter(a=>!_rosterSel.has(a.id||a.name));
+  _rosterSel.clear();
+  saveState(); renderMain();
+}
+
+function openAddSelectionToMeet() {
+  if(!_rosterSel.size) return;
+  const meets = state.meets||[];
+  const meetOpts = meets.map(m=>`<option value="${m.id}">${m.name}${m.date?' — '+m.date:''}</option>`).join('');
+  document.getElementById('modal-body').innerHTML=`
+    <h3>Add ${_rosterSel.size} Athlete${_rosterSel.size!==1?'s':''} to Meet</h3>
+    <div class="form-field">
+      <label>Existing meet</label>
+      <select id="sel-meet-id" style="width:100%;background:var(--dark2);border:1px solid var(--dark3);color:var(--white);border-radius:4px;padding:7px 10px;font-size:13px;">
+        <option value="">— Select a meet —</option>
+        ${meetOpts}
+      </select>
+    </div>
+    <div style="text-align:center;font-size:12px;color:var(--muted);margin:8px 0;">— or create a new meet —</div>
+    <div class="fg2">
+      <div class="form-field"><label>New meet name</label><input type="text" id="sel-new-meet-name" placeholder="e.g. Regional Championships"></div>
+      <div class="form-field"><label>Date</label><input type="date" id="sel-new-meet-date"></div>
+    </div>
+    <div class="form-field"><label>Location</label><input type="text" id="sel-new-meet-loc" placeholder="e.g. Tampa, FL"></div>
+    <div class="modal-actions" style="justify-content:space-between;">
+      <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-gold" onclick="confirmAddSelectionToMeet()">Add to Meet</button>
+    </div>`;
+  document.getElementById('overlay').style.display='flex';
+}
+
+function confirmAddSelectionToMeet() {
+  let meetId = document.getElementById('sel-meet-id').value;
+  const newName = document.getElementById('sel-new-meet-name').value.trim();
+  if(!meetId && !newName) { alert('Select an existing meet or enter a name for a new one.'); return; }
+  if(!state.meets) state.meets=[];
+  if(!meetId) {
+    meetId = newMeetId();
+    const newMeet = {id:meetId, name:newName, date:document.getElementById('sel-new-meet-date').value, location:document.getElementById('sel-new-meet-loc').value.trim(), entries:[]};
+    state.meets.push(newMeet);
+  }
+  const meet = state.meets.find(m=>m.id===meetId); if(!meet) return;
+  if(!meet.entries) meet.entries=[];
+  const existing = new Set(meet.entries.map(e=>e.athleteId));
+  _rosterSel.forEach(key=>{
+    if(!existing.has(key)){
+      meet.entries.push({athleteId:key, division:'', snatchAttempts:[null,null,null], cjAttempts:[null,null,null], benchAttempts:[null,null,null], snatchMade:[null,null,null], cjMade:[null,null,null], benchMade:[null,null,null]});
+    }
+  });
+  _rosterSel.clear();
+  _activeMeetId = meetId;
+  saveState(); closeModal();
+  state.activeTab='meets'; renderMain();
 }
 
 function openManageRosterFields() {
