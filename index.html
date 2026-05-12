@@ -2932,7 +2932,8 @@ function buildRosterHTML() {
     return `<th onclick="rosterSortBy('${field}')" style="cursor:pointer;white-space:nowrap;padding:7px 10px;font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:${active?'var(--gold)':'var(--muted)'};text-align:center;background:var(--dark2);border-bottom:1px solid var(--dark3);">${label} ${arrow}</th>`;
   }
 
-  const rows = filtered.length ? filtered.map((a,i)=>{
+  const rows = filtered.length ? filtered.map((a)=>{
+    const realIdx = state.roster.athletes.indexOf(a);
     const ot=athleteOlympicTotal(a), tt=athleteTraditionalTotal(a);
     const extraCells = fields.filter(f=>!['snatch','cj','bench'].includes(f.id)).map(f=>`<td style="text-align:center;color:var(--muted);padding:7px 10px;">${a[f.id]||'—'}</td>`).join('');
     return `<tr style="border-bottom:1px solid var(--dark3);" onmouseenter="this.style.background='var(--dark2)'" onmouseleave="this.style.background=''">
@@ -2948,8 +2949,8 @@ function buildRosterHTML() {
       <td style="text-align:center;padding:7px 10px;color:#5EC08A;font-weight:700;">${ot||'—'}</td>
       <td style="text-align:center;padding:7px 10px;color:#A07FD4;font-weight:700;">${tt||'—'}</td>
       <td style="padding:7px 8px;white-space:nowrap;">
-        <button onclick="openEditAthlete(${i})" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:12px;padding:1px 5px;">✏</button>
-        <button onclick="deleteAthlete(${i})" style="background:none;border:none;cursor:pointer;color:#555;font-size:11px;padding:1px 4px;">✕</button>
+        <button onclick="openEditAthlete(${realIdx})" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:12px;padding:1px 5px;">✏</button>
+        <button onclick="deleteAthlete(${realIdx})" style="background:none;border:none;cursor:pointer;color:#555;font-size:11px;padding:1px 4px;">✕</button>
       </td>
     </tr>`;
   }).join('') : `<tr><td colspan="99" style="padding:3rem;text-align:center;color:var(--muted);">No athletes match the current filter.</td></tr>`;
