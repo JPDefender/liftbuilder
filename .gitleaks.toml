@@ -4,15 +4,8 @@ useDefault = true
 [allowlist]
 description = "LiftBuilder project allowlist"
 paths = [
-  "node_modules",
-  "vendor",
-  "dist",
-  ".github/workflows/ci.yml",
+  '''node_modules''',
+  '''vendor''',
+  '''dist''',
+  '''CHECKSUMS\.sha256''',
 ]
-
-# Allow CHECKSUMS.sha256 — these are file hashes, not secrets
-[[rules]]
-id = "checksums-file"
-description = "Allow SHA-256 hashes in CHECKSUMS.sha256"
-path = "CHECKSUMS\\.sha256"
-allowlist.regexes = ["sha256", "sha384", "[0-9a-f]{64}"]
