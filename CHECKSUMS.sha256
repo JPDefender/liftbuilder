@@ -1,0 +1,13 @@
+# Vendor file integrity checksums
+# Format: SHA-256  filename
+# Regenerate with: openssl dgst -sha256 vendor/<file>
+# SRI (SHA-384 base64) for use in integrity= attributes:
+#   openssl dgst -sha384 -binary vendor/<file> | openssl base64 -A
+
+c0845096a7c4a6741f362ac506c94c1c7d27dc603bcc1bf64a587f76f2dbe3a1  vendor/purify.min.js
+74401d738dd3e03ee5dfb3b6841210fe2c4ead8a960c4011ca4ba0b78a9fd8f3  vendor/chart.umd.js
+98ccf17aa10c20bb1301762618fcc9b6ab3a4e7f26b6071d64d0b41154df3875  vendor/jspdf.umd.min.js
+
+# DOMPurify 3.1.6  — SHA-384 SRI: sha384-+VfUPEb0PdtChMwmBcBmykRMDd+v6D/oFmB3rZM/puCMDYcIvF968OimRh4KQY9a
+# Chart.js 4.4.1   — SHA-384 SRI: sha384-dug+JxfBvklEQdJ4AYuBBAIScUz0bVN73xpy273gcAwHjb3qI0fXmuYNaNfdyYJG
+# jsPDF 2.5.1      — SHA-384 SRI: sha384-JcnsjUPPylna1s1fvi1u12X5qjY5OL56iySh75FdtrwhO/SWXgMjoVqcKyIIWOLk

@@ -7,6 +7,7 @@
 <link href="vendor/fonts.css" rel="stylesheet">
 <script src="vendor/chart.umd.js"></script>
 <script src="vendor/jspdf.umd.min.js"></script>
+<script src="vendor/purify.min.js"></script>
 <style>
 :root {
   --gold:#4A90D9; --gold-light:#6AABF0; --gold-dark:#2E6FAF;
@@ -310,6 +311,8 @@ const CAT_META={
 // state.roster, and state.meets to the currently active team's object,
 // so all existing code continues to work without modification.
 
+let _pendingImportPrograms = null;
+
 let _stateCore = {
   activeTeamId: null,
   teams: {},             // { [teamId]: { id, name, programs, roster, meets } }
@@ -373,6 +376,33 @@ let charts = {};
 // ═══════════════════════════════════════════════════
 //  HELPERS
 // ═══════════════════════════════════════════════════
+function esc(v) {
+  return String(v ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+function sanitizeHTML(v) {
+  return typeof DOMPurify !== 'undefined'
+    ? DOMPurify.sanitize(String(v ?? ''))
+    : esc(v);
+}
+function validateNoProtoPollution(obj) {
+  if (obj === null || typeof obj !== 'object') return;
+  const banned = ['__proto__', 'constructor', 'prototype'];
+  for (const key of Object.keys(obj)) {
+    if (banned.includes(key)) throw new Error('Prototype pollution blocked.');
+    validateNoProtoPollution(obj[key]);
+  }
+}
+function csvCell(v) {
+  const s = String(v ?? '');
+  if (/^[=+\-@\t\r]/.test(s)) return "'" + s;
+  return s;
+}
+
 function prog() { return state.programs[state.activeProgId] || null; }
 function getWeek(w) { return prog() ? (prog().weeks[w]||null) : null; }
 function weekNums() { return prog() ? Object.keys(prog().weeks).map(Number).sort((a,b)=>a-b) : []; }
@@ -492,7 +522,7 @@ function renderSidebar() {
 
   const progRow = p => `
     <div class="prog-list-item ${p.id===state.activeProgId&&['program','volume','peaking','calendar'].includes(state.activeTab)?'active':''}" onclick="switchProgram('${p.id}')">
-      <span class="pl-name">${p.name}</span>
+      <span class="pl-name">${esc(p.name)}</span>
       <span class="pl-actions">
         <button class="pl-btn" onclick="event.stopPropagation();shareProgram('${p.id}')" title="Share / Export program as JSON">⬆</button>
         <button class="pl-btn" onclick="event.stopPropagation();openEditProgram('${p.id}')" title="Rename">✏</button>
@@ -503,7 +533,7 @@ function renderSidebar() {
   let progItems = '';
   if (multiOrg) {
     orgKeys.forEach(org => {
-      progItems += `<div style="padding:6px 1.25rem 2px;font-family:'Barlow Condensed',sans-serif;font-size:9px;font-weight:700;letter-spacing:1.4px;color:var(--gold);text-transform:uppercase;opacity:0.85;">${org || 'No School / Sport'}</div>`;
+      progItems += `<div style="padding:6px 1.25rem 2px;font-family:'Barlow Condensed',sans-serif;font-size:9px;font-weight:700;letter-spacing:1.4px;color:var(--gold);text-transform:uppercase;opacity:0.85;">${esc(org) || 'No School / Sport'}</div>`;
       progItems += groups[org].map(progRow).join('');
     });
   } else {
@@ -615,7 +645,7 @@ function buildProgramHTML() {
   }
   const wd=getWeek(state.currentWeek);
   const phase=wd?wd.phase:'accumulation';
-  const noteHTML=wd&&wd.note?`<div class="note-bar">📌 <span>${wd.note}</span></div>`:'';
+  const noteHTML=wd&&wd.note?`<div class="note-bar">📌 <span>${esc(wd.note)}</span></div>`:'';
   const ws=weekNums();
 
   function fmtPct(lo, hi) { if(lo<=0&&(!hi||hi<=0)) return '—'; if(hi>lo) return `${lo}–${hi}%`; return lo>0?`${lo}%`:'—'; }
@@ -626,16 +656,16 @@ function buildProgramHTML() {
       const parts=ex.supersetExercises.map((se,si)=>{
         const pct=fmtPct(se.intensity||0,se.intensityHigh||0);
         const measure=se.useTime?`${se.seconds||0}s`:`${se.reps||0} reps`;
-        return `<span style="display:block;font-size:11px;color:var(--light);padding-left:12px;"><span style="color:var(--gold);font-weight:700;font-family:'Barlow Condensed',sans-serif;">${LETTERS[si]}.</span> ${se.name} — ${measure} @ ${pct}</span>`;
+        return `<span style="display:block;font-size:11px;color:var(--light);padding-left:12px;"><span style="color:var(--gold);font-weight:700;font-family:'Barlow Condensed',sans-serif;">${LETTERS[si]}.</span> ${esc(se.name)} — ${measure} @ ${pct}</span>`;
       }).join('');
       nameCell=`<span class="cat-dot cat-${ex.category}"></span><span style="font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:700;letter-spacing:.5px;color:var(--muted);">SUPERSET</span>${parts}`;
     } else if(ex.isComplex && ex.movements && ex.movements.length){
-      const movParts=ex.movements.map(m=>`<span style="display:block;font-size:11px;color:var(--light);padding-left:12px;"><span class="cat-dot cat-${m.category||'other'}" style="width:5px;height:5px;"></span>${m.reps}× ${m.name}</span>`).join('');
+      const movParts=ex.movements.map(m=>`<span style="display:block;font-size:11px;color:var(--light);padding-left:12px;"><span class="cat-dot cat-${m.category||'other'}" style="width:5px;height:5px;"></span>${m.reps}× ${esc(m.name)}</span>`).join('');
       let groupParts='';
       if(ex.complexGroups&&ex.complexGroups.length>1){
         groupParts=ex.complexGroups.map(cg=>`<span style="display:block;font-size:11px;color:var(--muted);padding-left:12px;">${cg.sets} set${cg.sets!==1?'s':''} @ ${cg.intensity>0?cg.intensity+'%':'BW'}</span>`).join('');
       }
-      nameCell=`<span class="cat-dot cat-${ex.category}"></span><span style="font-weight:500;">${ex.name||'Complex'}</span>${movParts}${groupParts}`;
+      nameCell=`<span class="cat-dot cat-${ex.category}"></span><span style="font-weight:500;">${esc(ex.name)||'Complex'}</span>${movParts}${groupParts}`;
     } else if(ex.setGroups && ex.setGroups.length>1) {
       const isLadder=ex.scheme==='ladder';
       const parts=ex.setGroups.map((sg,si)=>{
@@ -646,13 +676,13 @@ function buildProgramHTML() {
       }).join('');
       const schemeBadge=ex.scheme&&ex.scheme!=='normal'?`<span class="scheme-badge ${ex.scheme==='amrap'?'amrap':ex.scheme==='heavy_single'?'heavy-single':'ladder'}">${ex.scheme==='amrap'?'AMRAP':ex.scheme==='heavy_single'?'HEAVY SINGLE':'LADDER'}</span>`:'';
       const rpeBadge=ex.useRPE?`<span class="scheme-badge amrap">RPE</span>`:'';
-      const noteEl=ex.note?`<span class="ex-note">${ex.note}</span>`:'';
-      nameCell=`<span class="cat-dot cat-${ex.category}"></span><span style="font-weight:500;">${ex.name}</span>${schemeBadge}${rpeBadge}${noteEl}${parts}`;
+      const noteEl=ex.note?`<span class="ex-note">${esc(ex.note)}</span>`:'';
+      nameCell=`<span class="cat-dot cat-${ex.category}"></span><span style="font-weight:500;">${esc(ex.name)}</span>${schemeBadge}${rpeBadge}${noteEl}${parts}`;
     } else {
       const schemeBadge=ex.scheme&&ex.scheme!=='normal'?`<span class="scheme-badge ${ex.scheme==='amrap'?'amrap':ex.scheme==='heavy_single'?'heavy-single':'ladder'}">${ex.scheme==='amrap'?'AMRAP':ex.scheme==='heavy_single'?'HEAVY SINGLE':'LADDER'}</span>`:'';
       const rpeBadge=ex.useRPE?`<span class="scheme-badge amrap">RPE</span>`:'';
-      const noteEl=ex.note?`<span class="ex-note">${ex.note}</span>`:'';
-      nameCell=`<span class="cat-dot cat-${ex.category}"></span>${ex.name}${schemeBadge}${rpeBadge}${noteEl}`;
+      const noteEl=ex.note?`<span class="ex-note">${esc(ex.note)}</span>`:'';
+      nameCell=`<span class="cat-dot cat-${ex.category}"></span>${esc(ex.name)}${schemeBadge}${rpeBadge}${noteEl}`;
     }
     const isAMRAP=ex.scheme==='amrap';
     const isHeavySingle=ex.scheme==='heavy_single';
@@ -719,7 +749,7 @@ function buildProgramHTML() {
       <div class="day-card-header">
         <div>
           <div class="day-name">${day}</div>
-          <div class="day-focus-text">${dd&&dd.focus?dd.focus:'—'}</div>
+          <div class="day-focus-text">${dd&&dd.focus?esc(dd.focus):'—'}</div>
         </div>
         <div style="display:flex;align-items:center;gap:7px;">
           <span class="day-vol-badge">${mainVol} reps</span>
@@ -727,7 +757,7 @@ function buildProgramHTML() {
           <button onclick="openEditDay('${day}')" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:13px;padding:2px 4px;" title="Edit day">✏</button>
         </div>
       </div>
-      ${dayNote?`<div style="background:var(--gold-a08);border-bottom:1px solid var(--gold-a15);padding:5px 13px;font-size:12px;color:var(--gold-light);display:flex;align-items:center;gap:6px;">📌 <span>${dayNote}</span></div>`:''}
+      ${dayNote?`<div style="background:var(--gold-a08);border-bottom:1px solid var(--gold-a15);padding:5px 13px;font-size:12px;color:var(--gold-light);display:flex;align-items:center;gap:6px;">📌 <span>${esc(dayNote)}</span></div>`:''}
       <div class="warmup-section">
         <div class="warmup-header">
           <div class="warmup-label">🔥 Warm-up <span class="warmup-badge">${warmupCount?warmupCount+' exercise'+(warmupCount>1?'s':''):''} <span style="opacity:0.6;">— not counted in volume</span></span></div>
@@ -1632,10 +1662,10 @@ function openEditProgram(pid) {
   const p=state.programs[pid];
   document.getElementById('modal-body').innerHTML=`
     <h3>Edit Program</h3>
-    <div class="form-field"><label>Program name</label><input type="text" id="ep-name" value="${p.name}"></div>
+    <div class="form-field"><label>Program name</label><input type="text" id="ep-name" value="${esc(p.name)}"></div>
     <div class="fg2">
-      <div class="form-field"><label>Organization / School</label><input type="text" id="ep-org" value="${p.org||''}"></div>
-      <div class="form-field"><label>Season / Year</label><input type="text" id="ep-season" value="${p.season||''}"></div>
+      <div class="form-field"><label>Organization / School</label><input type="text" id="ep-org" value="${esc(p.org||'')}"></div>
+      <div class="form-field"><label>Season / Year</label><input type="text" id="ep-season" value="${esc(p.season||'')}"></div>
     </div>
     <div class="modal-actions">
       <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
@@ -2011,14 +2041,15 @@ function renderLibraryQuickAdd() {
   const q=(document.getElementById('lib-q')||{}).value||'';
   const items=state.exerciseLibrary.filter(e=>!q||e.name.toLowerCase().includes(q.toLowerCase()));
   if(!items.length){el.innerHTML=q?`<div style="font-size:11px;color:var(--muted);padding:6px 8px;">No matches.</div>`:'';return;}
-  el.innerHTML=items.slice(0,8).map((e,i)=>`
-    <div class="lib-item" onclick="quickFillFromLibrary(${state.exerciseLibrary.indexOf(e)})">
+  el.innerHTML=items.slice(0,8).map((e)=>`
+    <div class="lib-item" data-lib-idx="${state.exerciseLibrary.indexOf(e)}">
       <span class="cat-dot cat-${e.category}"></span>
       <div class="lib-item-meta">
-        <div class="lib-item-name">${e.name}</div>
+        <div class="lib-item-name">${esc(e.name)}</div>
         <div class="lib-item-sub">${Object.entries(CAT_META).find(([k])=>k===e.category)?.[1]?.label||e.category} · ${e.sets}×${e.reps||'—'} @ ${e.intensity||0}%</div>
       </div>
     </div>`).join('');
+  el.onclick=ev=>{const item=ev.target.closest('[data-lib-idx]');if(item)quickFillFromLibrary(+item.dataset.libIdx);};
 }
 function quickFillFromLibrary(idx) {
   const e=state.exerciseLibrary[idx]; if(!e) return;
@@ -2116,7 +2147,7 @@ function renderSupersetRows() {
     const catOpts=Object.entries(CAT_META).map(([k,v])=>`<option value="${k}"${(se.category||'other')===k?' selected':''}>${v.label}</option>`).join('');
     return `<div class="superset-ex">
       <span style="font-family:'Barlow Condensed',sans-serif;font-weight:700;color:var(--gold);font-size:13px;">${LETTERS[i]}</span>
-      <input type="text" placeholder="Exercise name" value="${se.name||''}" oninput="_supersetExercises[${i}].name=this.value">
+      <input type="text" placeholder="Exercise name" value="${esc(se.name||'')}" oninput="_supersetExercises[${i}].name=this.value">
       <select oninput="_supersetExercises[${i}].category=this.value">${catOpts}</select>
       <input type="number" min="1" max="30" value="${se.reps||1}" style="text-align:center;" oninput="_supersetExercises[${i}].reps=parseInt(this.value)||1;autoVol()">
       <input type="number" min="0" max="115" value="${se.intensity||''}" placeholder="0=BW" style="text-align:center;" oninput="_supersetExercises[${i}].intensity=parseInt(this.value)||0">
@@ -2149,7 +2180,7 @@ function renderMovements() {
   const rows=_movements.map((m,i)=>{
     const catOpts=Object.entries(CAT_META).map(([k,v])=>`<option value="${k}"${(m.category||'other')===k?' selected':''}>${v.label}</option>`).join('');
     return `<div class="complex-movement">
-      <input type="text" placeholder="e.g. Power Clean" value="${m.name}"
+      <input type="text" placeholder="e.g. Power Clean" value="${esc(m.name)}"
         oninput="_movements[${i}].name=this.value;autoNameComplex();updateComplexVol()">
       <select oninput="_movements[${i}].category=this.value">${catOpts}</select>
       <div style="display:flex;align-items:center;gap:4px;">
@@ -2667,7 +2698,7 @@ function buildCalculatorHTML() {
       <div style="display:flex;align-items:center;gap:8px;">
         <select id="calc-athlete" onchange="loadAthleteIntoCalc()" style="background:var(--dark2);border:1px solid var(--dark3);color:var(--white);border-radius:4px;padding:5px 8px;font-size:13px;">
           <option value="">— Select athlete —</option>
-          ${athletes.map(a=>`<option value="${a.id||a.name}">${a.name}${a.wc?' ('+a.wc+' lbs)':''}</option>`).join('')}
+          ${athletes.map(a=>`<option value="${esc(a.id||a.name)}">${esc(a.name)}${a.wc?' ('+esc(a.wc)+' lbs)':''}</option>`).join('')}
         </select>
         <div style="display:flex;background:var(--dark2);border:1px solid var(--dark3);border-radius:4px;overflow:hidden;">
           <button onclick="state.weightUnit='lbs';saveState();renderMain();" style="padding:5px 12px;border:none;cursor:pointer;font-size:12px;font-weight:600;font-family:'Barlow Condensed',sans-serif;background:${unit==='lbs'?'var(--dark3)':'transparent'};color:${unit==='lbs'?'var(--white)':'var(--muted)'};">LBS</button>
@@ -2748,7 +2779,7 @@ function buildAttemptsHTML() {
       <div style="display:flex;align-items:center;gap:8px;">
         <select id="att-athlete" onchange="_attAthleteId=this.value;loadAthleteIntoAttempts()" style="background:var(--dark2);border:1px solid var(--dark3);color:var(--white);border-radius:4px;padding:5px 8px;font-size:13px;">
           <option value="">— Select athlete —</option>
-          ${athletes.map(a=>`<option value="${a.id||a.name}" ${_attAthleteId===(a.id||a.name)?'selected':''}>${a.name}${a.wc?' ('+a.wc+' lbs)':''}</option>`).join('')}
+          ${athletes.map(a=>`<option value="${esc(a.id||a.name)}" ${_attAthleteId===(a.id||a.name)?'selected':''}>${esc(a.name)}${a.wc?' ('+esc(a.wc)+' lbs)':''}</option>`).join('')}
         </select>
         <div style="display:flex;background:var(--dark2);border:1px solid var(--dark3);border-radius:4px;overflow:hidden;">
           <button onclick="_attAthleteId=(document.getElementById('att-athlete')||{}).value||'';state.weightUnit='lbs';saveState();renderMain();" style="padding:5px 12px;border:none;cursor:pointer;font-size:12px;font-weight:600;font-family:'Barlow Condensed',sans-serif;background:${unit==='lbs'?'var(--dark3)':'transparent'};color:${unit==='lbs'?'var(--white)':'var(--muted)'};">LBS</button>
@@ -2976,7 +3007,7 @@ function buildMeetDetailHTML(meet) {
       <div style="display:flex;gap:8px;align-items:center;">
         ${unathletes.length?`<select id="add-entry-sel" style="background:var(--dark2);border:1px solid var(--dark3);color:var(--white);border-radius:4px;padding:5px 8px;font-size:13px;">
           <option value="">Add athlete…</option>
-          ${unathletes.map(a=>`<option value="${a.id||a.name}">${a.name}</option>`).join('')}
+          ${unathletes.map(a=>`<option value="${esc(a.id||a.name)}">${esc(a.name)}</option>`).join('')}
         </select>
         <button class="btn btn-gold" onclick="addMeetEntry('${meet.id}')" style="font-size:12px;padding:5px 12px;">+ Add</button>`:
         '<span style="font-size:12px;color:var(--muted);">All athletes added</span>'}
@@ -3134,7 +3165,7 @@ function exportMeetRosterCSV(meetId) {
   const rows = [['Name','Weight Class','Division']];
   (meet.entries||[]).forEach(entry=>{
     const ath = athletes.find(a=>(a.id||a.name)===entry.athleteId)||{name:entry.athleteId,wc:''};
-    rows.push([ath.name, ath.wc||'', entry.division||'']);
+    rows.push([csvCell(ath.name), csvCell(ath.wc||''), csvCell(entry.division||'')]);
   });
   const csv = rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
   const blob = new Blob([csv],{type:'text/csv'});
@@ -3340,18 +3371,18 @@ function buildRosterHTML() {
   const rows = filtered.length ? filtered.map((a)=>{
     const realIdx = state.roster.athletes.indexOf(a);
     const ot=athleteOlympicTotal(a), tt=athleteTraditionalTotal(a);
-    const extraCells = fields.filter(f=>!['snatch','cj','bench'].includes(f.id)).map(f=>`<td style="text-align:center;color:var(--muted);padding:7px 10px;">${a[f.id]||'—'}</td>`).join('');
+    const extraCells = fields.filter(f=>!['snatch','cj','bench'].includes(f.id)).map(f=>`<td style="text-align:center;color:var(--muted);padding:7px 10px;">${esc(String(a[f.id]||''))||'—'}</td>`).join('');
     const athKey = a.id||a.name;
     const isSel = _rosterSel.has(athKey);
     return `<tr style="border-bottom:1px solid var(--dark3);background:${isSel?'var(--gold-a15)':''};" onmouseenter="this.style.background='${isSel?'var(--gold-a15)':'var(--dark2)'}'" onmouseleave="this.style.background='${isSel?'var(--gold-a15)':''}'">
       <td style="padding:7px 10px;text-align:center;">
         <input type="checkbox" ${isSel?'checked':''} onchange="rosterToggleOne('${athKey.replace(/'/g,"\\'")}',this.checked)" style="cursor:pointer;">
       </td>
-      <td style="padding:7px 10px;font-weight:500;">${a.name}</td>
-      <td style="text-align:center;padding:7px 10px;color:var(--muted);">${a.gender||'—'}</td>
-      <td style="text-align:center;padding:7px 10px;color:var(--muted);">${a.wc||'—'}</td>
-      <td style="text-align:center;padding:7px 10px;color:var(--muted);">${a.gradYear||'—'}</td>
-      <td style="text-align:center;padding:7px 10px;color:var(--muted);">${a.team||'—'}</td>
+      <td style="padding:7px 10px;font-weight:500;">${esc(a.name)}</td>
+      <td style="text-align:center;padding:7px 10px;color:var(--muted);">${esc(a.gender)||'—'}</td>
+      <td style="text-align:center;padding:7px 10px;color:var(--muted);">${esc(a.wc)||'—'}</td>
+      <td style="text-align:center;padding:7px 10px;color:var(--muted);">${esc(a.gradYear)||'—'}</td>
+      <td style="text-align:center;padding:7px 10px;color:var(--muted);">${esc(a.team)||'—'}</td>
       <td style="text-align:center;padding:7px 10px;color:#C9A84C;font-weight:600;">${a.snatch||0}</td>
       <td style="text-align:center;padding:7px 10px;color:#3A86D4;font-weight:600;">${a.cj||0}</td>
       <td style="text-align:center;padding:7px 10px;color:#C06060;font-weight:600;">${a.bench||0}</td>
@@ -3557,7 +3588,7 @@ function handleCSVFile(input) {
       _csvData={headers,rows};
       renderCSVPreview(headers,rows,_csvCols);
     } catch(err) {
-      document.getElementById('csv-preview').innerHTML=`<div style="color:#E85252;margin-top:1rem;">Error reading file: ${err.message}</div>`;
+      document.getElementById('csv-preview').innerHTML=`<div style="color:#E85252;margin-top:1rem;">Error reading file: ${esc(err.message)}</div>`;
     }
   };
   reader.readAsText(file);
@@ -3584,8 +3615,8 @@ function renderCSVPreview(headers,rows,cols) {
   const mappingRows=fieldMap.map(f=>`<tr>
     <td style="padding:3px 8px;color:var(--muted);font-size:12px;">${f.label}</td>
     <td style="padding:3px 8px;font-size:12px;color:${f.idx!==-1?'var(--white)':'#555'};">${
-      f.idx===-2?`"${headers[cols.firstName]}" + "${headers[cols.lastName]}"`:
-      f.idx>=0?`"${headers[f.idx]}"`:
+      f.idx===-2?`"${esc(headers[cols.firstName])}" + "${esc(headers[cols.lastName])}"`:
+      f.idx>=0?`"${esc(headers[f.idx])}"`:
       '— not found'
     }</td>
   </tr>`).join('');
@@ -3594,14 +3625,14 @@ function renderCSVPreview(headers,rows,cols) {
     const name=cols.firstName>=0&&cols.lastName>=0?(r[cols.firstName]||'')+' '+(r[cols.lastName]||''):cols.name>=0?r[cols.name]||'':'?';
     const cells=[name.trim()];
     detected.filter(f=>f.key!=='name').forEach(f=>{ cells.push(f.idx>=0?r[f.idx]||'':''); });
-    return `<tr>${cells.map(p=>`<td style="padding:3px 8px;font-size:11px;color:var(--light);">${p}</td>`).join('')}</tr>`;
+    return `<tr>${cells.map(p=>`<td style="padding:3px 8px;font-size:11px;color:var(--light);">${esc(p)}</td>`).join('')}</tr>`;
   }).join('');
   preview.innerHTML=`
     <div style="margin-top:1rem;">
       <div style="font-size:12px;font-weight:600;color:var(--gold);margin-bottom:6px;">Detected ${valid.length} athlete${valid.length!==1?'s':''} — column mapping:</div>
       <table style="width:100%;border-collapse:collapse;margin-bottom:1rem;"><tbody>${mappingRows}</tbody></table>
       <div style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:4px;">Preview (first ${Math.min(5,valid.length)}):</div>
-      <table style="width:100%;border-collapse:collapse;"><thead><tr>${detectedLabels.map(h=>`<th style="padding:3px 8px;font-size:10px;color:var(--muted);text-align:left;">${h}</th>`).join('')}</tr></thead><tbody>${sampleRows}</tbody></table>
+      <table style="width:100%;border-collapse:collapse;"><thead><tr>${detectedLabels.map(h=>`<th style="padding:3px 8px;font-size:10px;color:var(--muted);text-align:left;">${esc(h)}</th>`).join('')}</tr></thead><tbody>${sampleRows}</tbody></table>
     </div>`;
   actions.innerHTML=`
     <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
@@ -4170,10 +4201,12 @@ function openImportTemplate() {
 function importTemplate() {
   const file=document.getElementById('tpl-file')?.files[0];
   if(!file){alert('Please select a file.');return;}
+  if(file.size > 5 * 1024 * 1024){alert('File too large (max 5 MB).');return;}
   const reader=new FileReader();
   reader.onload=e=>{
     try{
       const data=JSON.parse(e.target.result);
+      validateNoProtoPollution(data);
       if(!data.liftbuilder_template||!data.weeks){alert('Invalid template file.');return;}
       if(!state.templates) state.templates=[];
       state.templates.push({name:data.name||'Imported Template',trainingDays:data.trainingDays||[],weeks:data.weeks,created:Date.now()});
@@ -4196,6 +4229,7 @@ function saveState() {
   try { const cur = localStorage.getItem(STORAGE_KEY); if(cur) _undoSnapshot = cur; } catch(e) {}
   try {
     const payload = {
+      schemaVersion: 1,
       activeTeamId: _stateCore.activeTeamId,
       teams: _stateCore.teams,
       activeProgId: state.activeProgId,
@@ -4208,7 +4242,13 @@ function saveState() {
     _renderUndoBtn();
   } catch(e) {
     console.warn('LiftBuilder: could not save to localStorage', e);
-    alert('⚠️ Could not save your data. Your storage may be full. Use ⬇ Export JSON to back up your data.');
+    if (e instanceof DOMException && (e.name === 'QuotaExceededError' || e.name === 'NS_ERROR_DOM_QUOTA_REACHED')) {
+      if (confirm('⚠️ Storage is full — your data was NOT saved.\n\nExport your data now before it is lost?')) {
+        exportDataJSON();
+      }
+    } else {
+      alert('⚠️ Could not save your data. Use ⬇ Export JSON to back up your data.');
+    }
   }
 }
 
@@ -4250,7 +4290,17 @@ function loadState() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return false;
-    const payload = JSON.parse(raw);
+    let payload;
+    try {
+      payload = JSON.parse(raw);
+    } catch(parseErr) {
+      console.warn('LiftBuilder: corrupt localStorage', parseErr);
+      if (confirm('⚠️ Saved data appears corrupt and cannot be loaded.\n\nClear corrupted data and start fresh?')) {
+        localStorage.removeItem(STORAGE_KEY);
+        location.reload();
+      }
+      return false;
+    }
     if (!payload) return false;
 
     if (payload.teams) {
@@ -4337,10 +4387,12 @@ function importSharedProgram() {
   input.onchange = e => {
     const file = e.target.files[0];
     if (!file) return;
+    if (file.size > 5 * 1024 * 1024) { alert('File too large (max 5 MB).'); return; }
     const reader = new FileReader();
     reader.onload = ev => {
       try {
         const data = JSON.parse(ev.target.result);
+        validateNoProtoPollution(data);
         if (!data._liftbuilder || !data.programs) {
           alert('Not a valid LiftBuilder program file.'); return;
         }
@@ -4365,9 +4417,9 @@ function _showProgramSelectModal(programs) {
     <label style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:5px;cursor:pointer;background:var(--dark2);margin-bottom:6px;">
       <input type="checkbox" value="${i}" checked style="accent-color:var(--gold);width:15px;height:15px;flex-shrink:0;">
       <span style="flex:1;">
-        <span style="font-weight:600;color:var(--white);font-size:13px;">${p.name}</span>
-        ${p.org ? `<span style="color:var(--muted);font-size:11px;margin-left:6px;">${p.org}</span>` : ''}
-        <span style="display:block;color:var(--muted);font-size:11px;">${Object.keys(p.weeks||{}).length} weeks · ${(p.trainingDays||[]).join(', ')}</span>
+        <span style="font-weight:600;color:var(--white);font-size:13px;">${esc(p.name)}</span>
+        ${p.org ? `<span style="color:var(--muted);font-size:11px;margin-left:6px;">${esc(p.org)}</span>` : ''}
+        <span style="display:block;color:var(--muted);font-size:11px;">${Object.keys(p.weeks||{}).length} weeks · ${esc((p.trainingDays||[]).join(', '))}</span>
       </span>
     </label>`).join('');
 
@@ -4377,14 +4429,17 @@ function _showProgramSelectModal(programs) {
     <div id="prog-select-list">${rows}</div>
     <div class="modal-actions">
       <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
-      <button class="btn btn-gold" onclick="_confirmImportSelected(${JSON.stringify(programs).replace(/"/g,'&quot;')})">Import selected</button>
+      <button class="btn btn-gold" id="js-confirm-import-btn">Import selected</button>
     </div>`;
   document.getElementById('overlay').style.display = 'flex';
+  _pendingImportPrograms = programs;
+  document.getElementById('js-confirm-import-btn').addEventListener('click', () => _confirmImportSelected(_pendingImportPrograms));
 }
 
 function _confirmImportSelected(programs) {
   const checked = [...document.querySelectorAll('#prog-select-list input[type=checkbox]:checked')].map(cb => parseInt(cb.value));
   if (!checked.length) { alert('Select at least one program.'); return; }
+  _pendingImportPrograms = null;
   closeModal();
   _doImportPrograms(checked.map(i => programs[i]));
 }
@@ -4434,10 +4489,12 @@ function importDataJSON() {
   input.type = 'file'; input.accept = '.json';
   input.onchange = e => {
     const file = e.target.files[0]; if(!file) return;
+    if (file.size > 5 * 1024 * 1024) { alert('File too large (max 5 MB).'); return; }
     const reader = new FileReader();
     reader.onload = ev => {
       try {
         const data = JSON.parse(ev.target.result);
+        validateNoProtoPollution(data);
         if (!data._liftbuilder && !data.programs && !data.teams) { alert('Not a valid LiftBuilder backup file.'); return; }
         const dateStr = data.exported ? new Date(data.exported).toLocaleDateString() : 'unknown date';
         if (data.teams) {
@@ -4466,7 +4523,7 @@ function importDataJSON() {
         state.activeTab = 'program';
         saveState();
         render();
-      } catch(e) { alert('Could not read backup file. Make sure it is a valid LiftBuilder export.'); }
+      } catch(err) { console.warn('importDataJSON:', err); alert('Could not read backup file. Make sure it is a valid LiftBuilder export.'); }
     };
     reader.readAsText(file);
   };

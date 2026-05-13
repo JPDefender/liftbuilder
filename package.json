@@ -9,7 +9,10 @@
     "build:mac": "electron-builder --mac",
     "build:win": "electron-builder --win",
     "publish:mac": "electron-builder --mac --publish always",
-    "publish:win": "electron-builder --win --publish always"
+    "publish:win": "electron-builder --win --publish always",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:security": "vitest run test/security"
   },
   "build": {
     "appId": "com.liftbuilder.app",
@@ -24,8 +27,18 @@
     "mac": {
       "category": "public.app-category.sports",
       "target": [
-        { "target": "dmg", "arch": ["universal"] },
-        { "target": "zip", "arch": ["universal"] }
+        {
+          "target": "dmg",
+          "arch": [
+            "universal"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "universal"
+          ]
+        }
       ],
       "icon": "build/icon.icns"
     },
@@ -60,10 +73,14 @@
     }
   },
   "devDependencies": {
-    "electron": "^36.0.0",
-    "electron-builder": "^25.1.8"
+    "@vitest/coverage-v8": "4.1.6",
+    "dompurify": "3.1.6",
+    "electron": "36.9.5",
+    "electron-builder": "25.1.8",
+    "jsdom": "29.1.1",
+    "vitest": "4.1.6"
   },
   "dependencies": {
-    "electron-updater": "^6.8.3"
+    "electron-updater": "6.8.3"
   }
 }
