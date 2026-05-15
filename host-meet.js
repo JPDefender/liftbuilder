@@ -34,6 +34,10 @@ const HM = (() => {
   let _timerInterval      = null;
   let _compFontLarge      = false;
   let _lastLift           = null;  // last recorded result, shown on display while waiting
+  let _platformActive       = false; // true when platform server is running
+  let _platformInfo         = null;  // { ip, port }
+  let _platformSyncLock     = false; // prevents circular sync loops
+  let _connectedPlatforms   = [];    // pNums currently connected, from server broadcasts
 
   // ── Persistence ────────────────────────────────────────────────────────────
   const STORE_KEY         = 'liftbuilder_hosted_meets';
@@ -42,6 +46,10 @@ const HM = (() => {
   function _save() {
     try { localStorage.setItem(STORE_KEY, JSON.stringify(_meets)); } catch(e) {}
     _saveDisplayState();
+    if (_platformActive && !_platformSyncLock) {
+      const m = _meet();
+      if (m) window.liftbuilderApp?.syncPlatformState?.(m);
+    }
   }
   function _saveDisplayState() {
     try {
@@ -65,7 +73,7 @@ const HM = (() => {
     return {
       id: _uid('ent'), athleteId: athleteId || null,
       name, schoolId, wc, discipline,
-      flight: 'A',
+      flight: 'A', platform: null,
       weighIn: null,
       snatchOpen: defaults?.snatch || 0,
       cjOpen:     defaults?.cj     || 0,
@@ -242,6 +250,14 @@ const HM = (() => {
               style="padding:2px 9px;border:none;cursor:pointer;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:12px;background:${ef==='B'?'var(--gold)':'var(--dark3)'};color:${ef==='B'?'#000':'var(--muted)'};">B</button>
           </div>
         </td>` : ''}
+        ${m.numPlatforms ? `
+        <td style="padding:8px 10px;text-align:center;">
+          <select onchange="HM.setPlatformForEntry('${e.id}',this.value)"
+            style="background:var(--dark2);color:var(--white);border:1px solid var(--dark3);border-radius:4px;padding:3px 6px;font-size:12px;font-family:'Barlow Condensed',sans-serif;font-weight:600;">
+            <option value="">—</option>
+            ${Array.from({length:m.numPlatforms},(_,i)=>i+1).map(n=>`<option value="${n}" ${e.platform===n?'selected':''}>P${n}</option>`).join('')}
+          </select>
+        </td>` : ''}
         <td style="padding:8px 10px;text-align:right;">
           <button onclick="HM.removeEntry('${e.id}')"
             style="background:none;border:none;cursor:pointer;color:#555;font-size:12px;padding:2px 5px;"
@@ -286,6 +302,13 @@ const HM = (() => {
             <label>Location / Venue</label>
             <input type="text" id="hm-location" value="${esc(m.location)}" placeholder="e.g. Seminole H.S. Weight Room" oninput="HM.autoSaveSetup()">
           </div>
+          <div class="form-field">
+            <label>Platforms</label>
+            <select id="hm-num-platforms" onchange="HM.autoSaveSetup()">
+              <option value="0" ${!m.numPlatforms?'selected':''}>Single Platform</option>
+              ${[2,3,4,5,6,7,8,9,10].map(n=>`<option value="${n}" ${m.numPlatforms===n?'selected':''}>${n} Platforms</option>`).join('')}
+            </select>
+          </div>
         </div>
 
         <div class="chart-card">
@@ -322,6 +345,7 @@ const HM = (() => {
               <th style="text-align:center;padding:6px 10px;font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:600;letter-spacing:.5px;color:var(--muted);">Wt Class</th>
               <th style="text-align:center;padding:6px 10px;font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:600;letter-spacing:.5px;color:var(--muted);">Discipline</th>
               ${m.useFlights ? `<th style="text-align:center;padding:6px 10px;font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:600;letter-spacing:.5px;color:var(--muted);">Flight</th>` : ''}
+              ${m.numPlatforms ? `<th style="text-align:center;padding:6px 10px;font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:600;letter-spacing:.5px;color:var(--muted);">Platform</th>` : ''}
               <th></th>
             </tr></thead>
             <tbody>${entryRows}</tbody>
@@ -690,12 +714,153 @@ const HM = (() => {
         <div style="width:1px;background:var(--dark3);height:24px;margin:0 10px;"></div>
         <button onclick="HM._toggleCompFont()" class="btn btn-outline" style="font-size:12px;padding:5px 10px;font-family:'Barlow Condensed',sans-serif;font-weight:700;" title="Toggle font size">${_compFontLarge ? 'A−' : 'A+'}</button>
         <button onclick="HM.openDisplayWindow()" class="btn btn-outline" style="font-size:12px;padding:5px 10px;" title="Open live display window">📺 Display</button>
+        ${m.numPlatforms ? `
+        <div style="width:1px;background:var(--dark3);height:24px;margin:0 4px;"></div>
+        ${_platformActive
+          ? `<button onclick="HM.stopPlatforms()" class="btn btn-outline" style="font-size:12px;padding:5px 10px;border-color:#5EC08A;color:#5EC08A;">📡 Stop Platforms</button>`
+          : `<button onclick="HM.startPlatforms()" class="btn btn-gold" style="font-size:12px;padding:5px 12px;">📡 Start Platforms</button>`
+        }` : ''}
         <button onclick="HM.advancePhase()" class="btn btn-gold" style="font-size:13px;margin-left:6px;" ${phaseComplete?'':'disabled'}
           title="${phaseComplete?'Move to next phase':'All athletes must finish this lift first'}">
           ${lift === 'bench' ? 'Complete Meet ✓' : 'Next Phase →'}
         </button>
       </div>
       <img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" style="display:none" onload="HM._onCompMounted()">
+      ${_platformActive && _platformInfo ? (() => {
+        const base = `http://${_platformInfo.ip}:${_platformInfo.port}`;
+        const allComplete = Array.from({length: m.numPlatforms}, (_, i) => i + 1)
+          .every(n => (m.platformStates?.[n]?.status || m.status) === 'complete');
+
+        const cards = Array.from({length: m.numPlatforms}, (_, i) => {
+          const pNum      = i + 1;
+          const ps        = m.platformStates?.[pNum] || {};
+          const pStatus   = ps.status || m.status;
+          const pLift     = STATUS_LABEL[pStatus] || pStatus;
+          const ar        = ps.attemptRound || 1;
+          const bw        = ps.barWeight    || null;
+          const pEntries  = m.entries.filter(e => e.platform === pNum);
+          const ciSet     = new Set(ps.checkedIn || []);
+          const isConn    = _connectedPlatforms.includes(pNum);
+          const isDone    = pStatus === 'complete';
+          const elig      = pEntries.filter(e => _eligibleForLift(e, pStatus));
+          const remaining = elig.filter(e => _curIdx(e, pStatus) >= 0).length;
+          const doneCount = elig.filter(e => _curIdx(e, pStatus) < 0).length;
+
+          // Find current lifter (first checked-in entry)
+          let nowName = '', nowWeight = '', nowMeta = '';
+          for (const e of pEntries) {
+            const idx = _curIdx(e, pStatus);
+            if (idx >= 0 && ciSet.has(e.id + ':' + idx)) {
+              const sch  = m.schools.find(s => s.id === e.schoolId);
+              const att  = e[pStatus][idx];
+              const ord  = ['1st','2nd','3rd'][idx] || (idx+1)+'th';
+              nowName   = e.name;
+              nowWeight = att.declared ? att.declared + ' lbs' : '—';
+              nowMeta   = `${esc(sch?.name||'')} · ${e.wc} lbs · ${ord}`;
+              break;
+            }
+          }
+
+          const connDot   = isConn
+            ? `<span style="font-size:11px;font-weight:700;color:#5EC08A;padding:2px 8px;background:rgba(94,192,138,.12);border-radius:3px;">● LIVE</span>`
+            : `<span style="font-size:11px;font-weight:700;color:#666;padding:2px 8px;background:rgba(100,100,100,.12);border-radius:3px;">○ OFFLINE</span>`;
+
+          const phaseComplete = elig.length > 0 && elig.every(e => e[pStatus].every(a => a.result !== null));
+          const roundLabel  = ['1st','2nd','3rd'][ar-1] || ar+'th';
+          const nextRoundLbl = ['2nd','3rd'][ar-1];
+
+          return `
+            <div style="background:var(--dark2);border:1px solid ${isDone?'#5EC08A':isConn?'var(--dark3)':'#333'};border-radius:10px;padding:0;overflow:hidden;">
+              <div style="padding:10px 14px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--dark3);">
+                <span style="font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;letter-spacing:1px;color:var(--gold);">PLATFORM ${pNum}</span>
+                <div style="display:flex;align-items:center;gap:8px;">
+                  ${connDot}
+                  <button onclick="window.open('${base}/platform/${pNum}')"
+                    style="font-size:10px;font-family:'Barlow Condensed',sans-serif;font-weight:600;color:var(--gold);background:none;cursor:pointer;padding:2px 7px;border:1px solid var(--gold-a50);border-radius:3px;">Open ↗</button>
+                </div>
+              </div>
+
+              <div style="padding:10px 14px;border-bottom:1px solid var(--dark3);">
+                <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                  <span style="font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;">${isDone?'✓ COMPLETE':pLift}</span>
+                  ${!isDone?`
+                    <span style="font-size:11px;color:var(--muted);">${roundLabel} Attempt</span>
+                    ${bw?`<span style="font-size:11px;font-weight:700;padding:1px 7px;background:rgba(94,192,138,.1);color:#5EC08A;border-radius:3px;">BAR: ${bw} lbs</span>`:''}
+                  `:''}
+                </div>
+              </div>
+
+              <div style="padding:10px 14px;min-height:64px;border-bottom:1px solid var(--dark3);">
+                ${nowName ? `
+                  <div style="font-size:9px;font-weight:700;letter-spacing:1.5px;color:var(--gold);margin-bottom:4px;">NOW LIFTING</div>
+                  <div style="font-size:16px;font-weight:700;">${esc(nowName)}</div>
+                  <div style="font-size:11px;color:var(--muted);">${nowMeta}</div>
+                  <div style="font-size:19px;font-weight:700;color:var(--gold);font-family:'Barlow Condensed',sans-serif;margin-top:2px;">${nowWeight}</div>
+                ` : isDone ? `
+                  <div style="font-size:13px;color:#5EC08A;font-weight:600;padding:8px 0;">All lifters finished 🏆</div>
+                ` : `
+                  <div style="font-size:12px;color:var(--muted);padding:8px 0;">${bw?`Bar at ${bw} lbs — waiting for check-in`:'Waiting for bar weight'}</div>
+                `}
+              </div>
+
+              ${(() => {
+                const waitingElig = pEntries
+                  .filter(e => _eligibleForLift(e, pStatus) && _curIdx(e, pStatus) >= 0 && !ciSet.has(e.id + ':' + _curIdx(e, pStatus)))
+                  .slice(0, 4);
+                if (!waitingElig.length || isDone) return '';
+                return `<div style="padding:6px 14px;border-bottom:1px solid var(--dark3);">
+                  <div style="font-size:9px;font-weight:700;letter-spacing:1.5px;color:var(--muted);margin-bottom:4px;">WAITING</div>
+                  ${waitingElig.map(e => {
+                    const idx = _curIdx(e, pStatus);
+                    const att = e[pStatus][idx];
+                    return `<div style="display:flex;align-items:center;gap:6px;padding:2px 0;">
+                      <span style="flex:1;font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(e.name)}</span>
+                      <span style="font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;color:var(--gold);flex-shrink:0;">${att.declared||'—'} lbs</span>
+                      <button onclick="HM.directorDeclareAttempt(${pNum},'${e.id}','${pStatus}',${idx},${att.declared||0})"
+                        style="font-size:9px;font-family:'Barlow Condensed',sans-serif;font-weight:700;color:var(--muted);background:none;border:1px solid #444;border-radius:3px;cursor:pointer;padding:1px 6px;flex-shrink:0;">DECLARE</button>
+                    </div>`;
+                  }).join('')}
+                </div>`;
+              })()}
+
+              <div style="padding:8px 14px;display:flex;align-items:center;gap:12px;font-size:11px;color:var(--muted);border-bottom:1px solid var(--dark3);">
+                <span>${pEntries.length} lifters</span>
+                <span>·</span>
+                <span style="color:${remaining?'var(--white)':'#5EC08A'};font-weight:${remaining?'400':'600'};">${remaining} remaining</span>
+                <span>·</span>
+                <span>${doneCount} done</span>
+              </div>
+
+              ${!isDone ? `
+              <div style="padding:8px 14px;display:flex;gap:6px;flex-wrap:wrap;">
+                <button onclick="HM.directorSetBarWeight(${pNum})" class="btn btn-outline" style="font-size:11px;padding:3px 9px;">Set Bar</button>
+                ${ar < 3 && nextRoundLbl ? `<button onclick="HM.directorAdvanceRound(${pNum})" class="btn btn-outline" style="font-size:11px;padding:3px 9px;">→ ${nextRoundLbl} Att</button>` : ''}
+                ${phaseComplete ? `<button onclick="HM.directorAdvancePhase(${pNum})" class="btn btn-gold" style="font-size:11px;padding:3px 9px;">Next Phase →</button>` : ''}
+              </div>` : ''}
+            </div>`;
+        }).join('');
+
+        const cols = m.numPlatforms <= 3 ? m.numPlatforms : m.numPlatforms <= 6 ? 3 : 4;
+
+        return `
+          <div style="display:grid;grid-template-columns:3fr 2fr;gap:1.25rem;align-items:start;">
+            <div>
+              <div style="display:flex;align-items:center;gap:10px;margin-bottom:.75rem;flex-wrap:wrap;">
+                <span style="font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;letter-spacing:1.5px;color:#5EC08A;">📡 PLATFORMS ACTIVE</span>
+                <code style="font-size:11px;background:var(--dark3);padding:2px 8px;border-radius:3px;color:var(--white);">${base}/platform/<em>N</em></code>
+                <span style="font-size:11px;color:var(--muted);">${_connectedPlatforms.length} of ${m.numPlatforms} connected</span>
+                <a href="#" onclick="event.preventDefault();window.open('${base}/scoreboard')" style="font-size:11px;color:var(--gold);text-decoration:none;border:1px solid var(--gold-a50);border-radius:3px;padding:1px 8px;font-family:'Barlow Condensed',sans-serif;font-weight:700;">📊 Scoreboard ↗</a>
+              </div>
+              ${allComplete ? `
+                <div style="background:rgba(94,192,138,.1);border:2px solid #5EC08A;border-radius:8px;padding:14px 18px;margin-bottom:1rem;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+                  <span style="font-size:15px;font-weight:700;color:#5EC08A;">🏆 All platforms complete</span>
+                  <button onclick="HM.advancePhase()" class="btn btn-gold" style="font-size:13px;">Complete Meet ✓</button>
+                </div>` : ''}
+              <div style="display:grid;grid-template-columns:repeat(${cols},1fr);gap:.75rem;">${cards}</div>
+            </div>
+            <div style="position:sticky;top:80px;">${_buildScoreboard(m)}</div>
+          </div>`;
+      })() : `
       ${m.useFlights ? `
       <div style="display:flex;gap:0;margin-bottom:1rem;border-radius:6px;overflow:hidden;border:1px solid var(--dark3);width:fit-content;">
         ${['A','B'].map(f => `
@@ -715,7 +880,8 @@ const HM = (() => {
           ${doneHTML}
         </div>
         <div style="position:sticky;top:80px;">${_buildScoreboard(m)}</div>
-      </div>`;
+      </div>`}
+      `;
   }
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -987,7 +1153,7 @@ const HM = (() => {
   // ══════════════════════════════════════════════════════════════════════════
   function newMeet() {
     const id = _uid('hm');
-    _meets.push({ id, name:'', date:'', location:'', gender:'Boys', status:'setup', useFlights:false, schools:[], entries:[] });
+    _meets.push({ id, name:'', date:'', location:'', gender:'Boys', status:'setup', useFlights:false, numPlatforms:0, platformStates:{}, schools:[], entries:[] });
     _activeMeetId = id;
     _save();
     _view = 'setup';
@@ -1000,10 +1166,12 @@ const HM = (() => {
     const d = document.getElementById('hm-date');
     const l = document.getElementById('hm-location');
     const g = document.getElementById('hm-gender');
-    if (n) m.name     = n.value.trim();
-    if (d) m.date     = d.value;
-    if (l) m.location = l.value.trim();
-    if (g) m.gender   = g.value;
+    const p = document.getElementById('hm-num-platforms');
+    if (n) m.name         = n.value.trim();
+    if (d) m.date         = d.value;
+    if (l) m.location     = l.value.trim();
+    if (g) m.gender       = g.value;
+    if (p) m.numPlatforms = parseInt(p.value) || 0;
     _save();
   }
 
@@ -1319,7 +1487,7 @@ const HM = (() => {
     const m = _meet(); if (!m) return;
     const e = m.entries.find(x => x.id === entryId); if (!e) return;
     const att = e[lift][attemptIdx]; if (!att) return;
-    _lastLift = { entryId: e.id, name: e.name, schoolId: e.schoolId, wc: e.wc, lift, declared: att.declared, result, attemptIdx };
+    _lastLift = { entryId: e.id, name: e.name, schoolId: e.schoolId, wc: e.wc, lift, declared: att.declared, result, attemptIdx, platform: e.platform ?? null };
     att.result = result;
     _save();
     const nextIdx = attemptIdx + 1;
@@ -1744,6 +1912,85 @@ const HM = (() => {
     _save(); renderMain();
   }
 
+  function setPlatformForEntry(entryId, val) {
+    const m = _meet(); if (!m) return;
+    const e = m.entries.find(x => x.id === entryId); if (!e) return;
+    e.platform = val === '' ? null : parseInt(val);
+    _save();
+  }
+
+  // ── Platform server ─────────────────────────────────────────────────────────
+  async function startPlatforms() {
+    const m = _meet(); if (!m) return;
+    autoSaveSetup();
+    if (!window.liftbuilderApp?.startPlatformServer) {
+      showToast('Platform server requires the desktop app.'); return;
+    }
+    // Initialise platformStates for each platform
+    if (!m.platformStates) m.platformStates = {};
+    for (let i = 1; i <= m.numPlatforms; i++) {
+      if (!m.platformStates[i]) {
+        m.platformStates[i] = { status: m.status, attemptRound: 1, barWeight: null, checkedIn: [] };
+      }
+    }
+    _save();
+    const result = await window.liftbuilderApp.startPlatformServer(m);
+    if (!result.success) { showToast('Server failed: ' + (result.error||'unknown error')); return; }
+    _platformActive = true;
+    _platformInfo   = { ip: result.ip, port: result.port };
+    // Listen for state updates from the server
+    window.liftbuilderApp.onPlatformStateSync(_applyPlatformSync);
+    renderMain();
+    showToast(`Platforms live at ${result.ip}:${result.port}`);
+  }
+
+  async function stopPlatforms() {
+    if (!confirm('Stop all platforms? Connected clients will be disconnected.')) return;
+    await window.liftbuilderApp?.stopPlatformServer?.();
+    _platformActive       = false;
+    _platformInfo         = null;
+    _connectedPlatforms   = [];
+    renderMain();
+  }
+
+  function directorSetBarWeight(pNum) {
+    const w = parseInt(prompt(`Platform ${pNum} — Set bar weight (lbs):`));
+    if (!w || w < 45) return;
+    window.liftbuilderApp?.directorSetBarWeight?.(pNum, w);
+  }
+
+  function directorAdvanceRound(pNum) {
+    if (!confirm(`Platform ${pNum} — Advance to next attempt round?`)) return;
+    window.liftbuilderApp?.directorAdvanceRound?.(pNum);
+  }
+
+  function directorAdvancePhase(pNum) {
+    if (!confirm(`Platform ${pNum} — Advance to next phase? Cannot be undone.`)) return;
+    window.liftbuilderApp?.directorAdvancePhase?.(pNum);
+  }
+
+  function directorDeclareAttempt(pNum, entryId, lift, attemptIdx, currentWeight) {
+    const raw = prompt(`Platform ${pNum} — New declared weight for attempt (current: ${currentWeight} lbs):`);
+    const w   = parseInt(raw);
+    if (!w || w < 45) return;
+    window.liftbuilderApp?.directorDeclareAttempt?.(entryId, lift, attemptIdx, w);
+  }
+
+  function _applyPlatformSync(newMeetState) {
+    _platformSyncLock = true;
+    _connectedPlatforms = newMeetState._connectedPlatforms || [];
+    // Strip runtime-only fields before persisting
+    const { _connectedPlatforms: _cp, ...cleanState } = newMeetState;
+    const idx = _meets.findIndex(m => m.id === cleanState.id);
+    if (idx >= 0) {
+      _meets[idx] = cleanState;
+      try { localStorage.setItem(STORE_KEY, JSON.stringify(_meets)); } catch(e) {}
+      _saveDisplayState();
+      if (_activeMeetId === cleanState.id) renderMain();
+    }
+    _platformSyncLock = false;
+  }
+
   function _setFlight(f) {
     _activeFlight = f;
     _saveDisplayState();
@@ -1956,6 +2203,9 @@ const HM = (() => {
     syncPRsToRoster, exportResultsCSV, exportResultsPDF,
     // Phase 3
     toggleFlights, setEntryFlight, _setFlight,
+    setPlatformForEntry,
+    startPlatforms, stopPlatforms,
+    directorSetBarWeight, directorAdvanceRound, directorAdvancePhase, directorDeclareAttempt,
     showStats,
     printScoreboard, openDisplayWindow,
   };
