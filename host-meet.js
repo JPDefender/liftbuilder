@@ -38,6 +38,10 @@ const HM = (() => {
   let _platformInfo         = null;  // { ip, port }
   let _platformSyncLock     = false; // prevents circular sync loops
   let _connectedPlatforms   = [];    // pNums currently connected, from server broadcasts
+  let _clockStart           = null;  // ms timestamp when clock started (single-platform mode)
+  let _clockDuration        = null;  // 60 or 120 seconds
+  let _clockPausedRemaining = null;  // ms remaining when paused, null if running or no clock
+  let _clockTickInterval    = null;  // setInterval handle for clock ticking
 
   // ── Persistence ────────────────────────────────────────────────────────────
   const STORE_KEY         = 'liftbuilder_hosted_meets';
@@ -54,11 +58,16 @@ const HM = (() => {
   function _saveDisplayState() {
     try {
       localStorage.setItem(DISPLAY_STATE_KEY, JSON.stringify({
-        checkedIn:    [..._checkedIn],
-        activeFlight: _activeFlight,
-        barWeight:    _barWeight,
-        attemptRound: _attemptRound,
-        lastLift:     _lastLift,
+        checkedIn:     [..._checkedIn],
+        activeFlight:  _activeFlight,
+        barWeight:     _barWeight,
+        attemptRound:  _attemptRound,
+        lastLift:      _lastLift,
+        clockStart:           _clockStart,
+        clockDuration:        _clockDuration,
+        clockPausedRemaining: _clockPausedRemaining,
+        timerEndMs:           _timerEndMs,
+        timerPausedRem:       _timerPausedRem,
       }));
     } catch(e) {}
   }
@@ -159,6 +168,45 @@ const HM = (() => {
               : (_timerPausedRem !== null ? _timerPausedRem : null);
     if (rem === null) return '—';
     return Math.floor(rem / 60000) + ':' + String(Math.floor((rem % 60000) / 1000)).padStart(2, '0');
+  }
+
+  function _fmtClock(start, duration) {
+    if (!start || !duration) return '';
+    const rem = Math.max(0, duration * 1000 - (Date.now() - start));
+    return Math.floor(rem / 60000) + ':' + String(Math.floor((rem % 60000) / 1000)).padStart(2,'0');
+  }
+  function _fmtClockMs(ms) {
+    const rem = Math.max(0, ms);
+    return Math.floor(rem / 60000) + ':' + String(Math.floor((rem % 60000) / 1000)).padStart(2,'0');
+  }
+
+  function _tickClock() {
+    document.querySelectorAll('[data-clock-start],[data-clock-paused]').forEach(el => {
+      if (el.dataset.clockPaused !== undefined && el.dataset.clockPaused !== '') {
+        const rem = parseInt(el.dataset.clockPaused);
+        if (isNaN(rem)) return;
+        const mins = Math.floor(rem / 60000);
+        const secs = Math.floor((rem % 60000) / 1000);
+        el.textContent = mins + ':' + String(secs).padStart(2,'0');
+        el.style.color = rem <= 10000 ? '#E07070' : rem <= 30000 ? '#E0A040' : '#5EC08A';
+        el.style.opacity = '0.6';
+        return;
+      }
+      el.style.opacity = '1';
+      const start    = parseInt(el.dataset.clockStart);
+      const duration = parseInt(el.dataset.clockDuration);
+      if (!start || !duration) { el.textContent = ''; return; }
+      const rem  = Math.max(0, duration * 1000 - (Date.now() - start));
+      const mins = Math.floor(rem / 60000);
+      const secs = Math.floor((rem % 60000) / 1000);
+      el.textContent = mins + ':' + String(secs).padStart(2,'0');
+      el.style.color = rem <= 10000 ? '#E07070' : rem <= 30000 ? '#E0A040' : '#5EC08A';
+    });
+  }
+
+  function _startClockTick() {
+    if (_clockTickInterval) clearInterval(_clockTickInterval);
+    _clockTickInterval = setInterval(_tickClock, 200);
   }
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -473,12 +521,13 @@ const HM = (() => {
 
     // Split into checked-in (active queue) and waiting (must check in first)
     const checkedIn = flight.filter(e => _checkedIn.has(e.id + ':' + _curIdx(e, lift)));
-    // Waiting: sorted so lifters who can check in right now (right round, not blocked) float to top
+    // Waiting: sorted so lifters on the current round who are not blocked float to top
     const waiting = flight
       .filter(e => !_checkedIn.has(e.id + ':' + _curIdx(e, lift)))
       .sort((a, b) => {
-        const canA = (_barWeight && _curIdx(a, lift) === _attemptRound - 1 && !_checkInBlocked(a, lift)) ? 0 : 1;
-        const canB = (_barWeight && _curIdx(b, lift) === _attemptRound - 1 && !_checkInBlocked(b, lift)) ? 0 : 1;
+        const idxA = _curIdx(a, lift); const idxB = _curIdx(b, lift);
+        const canA = (_barWeight && idxA === _attemptRound - 1 && !_checkInBlocked(a, lift)) ? 0 : 1;
+        const canB = (_barWeight && idxB === _attemptRound - 1 && !_checkInBlocked(b, lift)) ? 0 : 1;
         return canA - canB;
       });
     const current   = checkedIn[0] || null;
@@ -488,7 +537,7 @@ const HM = (() => {
     // Next bar weight suggestion — always +5 lbs
     const nextBarWeight = _barWeight ? _barWeight + 5 : null;
 
-    const roundOrd    = ['1st','2nd','3rd'];
+    const roundOrd     = ['1st','2nd','3rd'];
     const nextRoundOrd = roundOrd[_attemptRound]; // e.g. '2nd' when currently on 1st
 
     // Bar control
@@ -532,6 +581,18 @@ const HM = (() => {
               <div style="font-size:22px;font-weight:700;font-family:'Barlow Condensed',sans-serif;">${esc(current.name)}</div>
               <div style="font-size:13px;color:var(--muted);margin-top:2px;">${esc(school?.name||'?')} &nbsp;·&nbsp; ${current.wc} lbs &nbsp;·&nbsp; ${ordinal} attempt</div>
               <div style="font-size:30px;font-weight:700;font-family:'Barlow Condensed',sans-serif;margin-top:.4rem;color:var(--gold);">${att.declared} <span style="font-size:16px;color:var(--muted);">lbs</span></div>
+              ${(_clockStart || _clockPausedRemaining !== null) ? `<div style="display:flex;align-items:center;gap:10px;margin-top:.25rem;flex-wrap:wrap;">
+                <div ${_clockPausedRemaining !== null
+                  ? `data-clock-paused="${_clockPausedRemaining}"`
+                  : `data-clock-start="${_clockStart}" data-clock-duration="${_clockDuration}"`}
+                  style="font-family:'Barlow Condensed',sans-serif;font-size:40px;font-weight:700;color:#5EC08A;letter-spacing:1px;">
+                  ${_clockPausedRemaining !== null ? _fmtClockMs(_clockPausedRemaining) : _fmtClock(_clockStart, _clockDuration)}
+                </div>
+                ${_clockPausedRemaining !== null
+                  ? `<button onclick="HM.resumeClock()" style="font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;padding:4px 12px;border:2px solid #5EC08A;color:#5EC08A;background:none;border-radius:5px;cursor:pointer;">▶ Resume</button>`
+                  : `<button onclick="HM.pauseClock()" style="font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;padding:4px 12px;border:2px solid #E0A040;color:#E0A040;background:none;border-radius:5px;cursor:pointer;">⏸ Pause</button>`}
+                <button onclick="HM.resetClock()" style="font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;padding:4px 10px;border:2px solid #E07070;color:#E07070;background:none;border-radius:5px;cursor:pointer;">✕</button>
+              </div>` : ''}
             </div>
             <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
               <button onclick="HM.recordResult('${current.id}','${lift}',${idx},'good')"
@@ -693,11 +754,11 @@ const HM = (() => {
     const timerHTML = `
       <div style="display:flex;align-items:center;gap:7px;">
         <span id="hm-timer-display" style="font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:700;min-width:48px;color:${timerColor};">${_fmtTimer()}</span>
-        <button onclick="HM.startTimer(60)"  class="btn btn-outline" style="font-size:11px;padding:3px 8px;">1 min</button>
-        <button onclick="HM.startTimer(120)" class="btn btn-outline" style="font-size:11px;padding:3px 8px;">2 min</button>
+        <button onclick="HM.startTimer(300)"  class="btn btn-outline" style="font-size:11px;padding:3px 8px;">5 min</button>
+        <button onclick="HM.startTimer(600)" class="btn btn-outline" style="font-size:11px;padding:3px 8px;">10 min</button>
         ${hasTimer ? `
           <button onclick="HM.pauseResumeTimer()" class="btn btn-outline" style="font-size:11px;padding:3px 8px;">${timerRunning?'Pause':'Resume'}</button>
-          <button onclick="HM.resetTimer()" class="btn btn-outline" style="font-size:11px;padding:3px 8px;color:#E07070;border-color:#E07070;">✕</button>` : ''}
+          <button onclick="HM.resetTimer()" class="btn btn-outline" style="font-size:11px;padding:3px 8px;color:#E07070;border-color:#E07070;">Stop</button>` : ''}
       </div>`;
 
     const phaseComplete = _phaseComplete(m, lift);
@@ -745,6 +806,8 @@ const HM = (() => {
           const elig      = pEntries.filter(e => _eligibleForLift(e, pStatus));
           const remaining = elig.filter(e => _curIdx(e, pStatus) >= 0).length;
           const doneCount = elig.filter(e => _curIdx(e, pStatus) < 0).length;
+          const roundLabel    = ['1st','2nd','3rd'][ar-1] || ar+'th';
+          const nextRoundLbl  = ['2nd','3rd'][ar-1];
 
           // Find current lifter (first checked-in entry)
           let nowName = '', nowWeight = '', nowMeta = '';
@@ -766,8 +829,6 @@ const HM = (() => {
             : `<span style="font-size:11px;font-weight:700;color:#666;padding:2px 8px;background:rgba(100,100,100,.12);border-radius:3px;">○ OFFLINE</span>`;
 
           const phaseComplete = elig.length > 0 && elig.every(e => e[pStatus].every(a => a.result !== null));
-          const roundLabel  = ['1st','2nd','3rd'][ar-1] || ar+'th';
-          const nextRoundLbl = ['2nd','3rd'][ar-1];
 
           return `
             <div style="background:var(--dark2);border:1px solid ${isDone?'#5EC08A':isConn?'var(--dark3)':'#333'};border-radius:10px;padding:0;overflow:hidden;">
@@ -795,7 +856,21 @@ const HM = (() => {
                   <div style="font-size:9px;font-weight:700;letter-spacing:1.5px;color:var(--gold);margin-bottom:4px;">NOW LIFTING</div>
                   <div style="font-size:16px;font-weight:700;">${esc(nowName)}</div>
                   <div style="font-size:11px;color:var(--muted);">${nowMeta}</div>
-                  <div style="font-size:19px;font-weight:700;color:var(--gold);font-family:'Barlow Condensed',sans-serif;margin-top:2px;">${nowWeight}</div>
+                  <div style="display:flex;align-items:center;gap:10px;margin-top:2px;flex-wrap:wrap;">
+                    <div style="font-size:19px;font-weight:700;color:var(--gold);font-family:'Barlow Condensed',sans-serif;">${nowWeight}</div>
+                    ${(ps.clockStart || ps.clockPausedRemaining != null) ? `
+                    <div ${ps.clockPausedRemaining != null
+                      ? `data-clock-paused="${ps.clockPausedRemaining}"`
+                      : `data-clock-start="${ps.clockStart}" data-clock-duration="${ps.clockDuration}"`}
+                      style="font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:700;color:#5EC08A;letter-spacing:.5px;">
+                      ${ps.clockPausedRemaining != null ? _fmtClockMs(ps.clockPausedRemaining) : _fmtClock(ps.clockStart, ps.clockDuration)}
+                    </div>
+                    ${ps.clockPausedRemaining != null
+                      ? `<button onclick="HM.directorResumeClock(${pNum})" style="font-size:9px;font-family:'Barlow Condensed',sans-serif;font-weight:700;padding:2px 7px;border:1px solid #5EC08A;color:#5EC08A;background:none;border-radius:3px;cursor:pointer;">▶</button>`
+                      : `<button onclick="HM.directorPauseClock(${pNum})" style="font-size:9px;font-family:'Barlow Condensed',sans-serif;font-weight:700;padding:2px 7px;border:1px solid #E0A040;color:#E0A040;background:none;border-radius:3px;cursor:pointer;">⏸</button>`}
+                    <button onclick="HM.directorResetClock(${pNum})" style="font-size:9px;font-family:'Barlow Condensed',sans-serif;font-weight:700;padding:2px 7px;border:1px solid #E07070;color:#E07070;background:none;border-radius:3px;cursor:pointer;">✕</button>
+                    ` : ''}
+                  </div>
                 ` : isDone ? `
                   <div style="font-size:13px;color:#5EC08A;font-weight:600;padding:8px 0;">All lifters finished 🏆</div>
                 ` : `
@@ -1470,9 +1545,12 @@ const HM = (() => {
       });
       m.status = 'snatch';
       _save();
-      _barWeight = _minDeclared(m, 'snatch');
+      _barWeight            = _minDeclared(m, 'snatch');
       _checkedIn.clear();
-      _attemptRound = 1;
+      _attemptRound         = 1;
+      _clockStart           = null;
+      _clockDuration        = null;
+      _clockPausedRemaining = null;
     } else if (_barWeight === null) {
       _barWeight = _minDeclared(m, m.status);
     }
@@ -1489,6 +1567,19 @@ const HM = (() => {
     const att = e[lift][attemptIdx]; if (!att) return;
     _lastLift = { entryId: e.id, name: e.name, schoolId: e.schoolId, wc: e.wc, lift, declared: att.declared, result, attemptIdx, platform: e.platform ?? null };
     att.result = result;
+    // Remove this lifter's stale key and restart clock for next on-deck lifter
+    _checkedIn.delete(entryId + ':' + attemptIdx);
+    const remaining = [..._checkedIn];
+    if (remaining.length > 0) {
+      const nextEntryId     = remaining[0].split(':')[0];
+      _clockDuration        = nextEntryId === entryId ? 120 : 60;
+      _clockStart           = Date.now();
+      _clockPausedRemaining = null;
+    } else {
+      _clockStart           = null;
+      _clockDuration        = null;
+      _clockPausedRemaining = null;
+    }
     _save();
     const nextIdx = attemptIdx + 1;
     if (nextIdx < 3) {
@@ -1544,6 +1635,14 @@ const HM = (() => {
     return null;
   }
 
+  function _startClockForEntry(entryId) {
+    if (_checkedIn.size === 0) {
+      _clockDuration        = _lastLift?.entryId === entryId ? 120 : 60;
+      _clockStart           = Date.now();
+      _clockPausedRemaining = null;
+    }
+  }
+
   function checkIn(entryId, lift) {
     const m = _meet(); if (!m) return;
     const e = m.entries.find(x => x.id === entryId); if (!e) return;
@@ -1551,6 +1650,7 @@ const HM = (() => {
     const blocked = _checkInBlocked(e, lift);
     if (blocked) { alert(blocked); return; }
     e[lift][idx].declared = _barWeight;
+    _startClockForEntry(entryId);
     _checkedIn.add(e.id + ':' + idx);
     _save();
     renderMain();
@@ -1566,6 +1666,7 @@ const HM = (() => {
     const ok = confirm(`OVERRIDE — Missed Attempt Call\n\n${e.name} missed their attempt call.\nAllow their ${ordinal} attempt at ${_barWeight} lbs anyway?`);
     if (!ok) return;
     e[lift][idx].declared = _barWeight;
+    _startClockForEntry(entryId);
     _checkedIn.add(e.id + ':' + idx);
     _save();
     renderMain();
@@ -1575,6 +1676,9 @@ const HM = (() => {
     if (_attemptRound < 3) {
       _attemptRound++;
       _checkedIn.clear();
+      _clockStart           = null;
+      _clockDuration        = null;
+      _clockPausedRemaining = null;
       _saveDisplayState();
     }
     renderMain();
@@ -1583,9 +1687,12 @@ const HM = (() => {
   function setBarWeight(w) {
     const val = parseInt(w) || 0;
     if (val > 0) {
-      _barWeight = val;
+      _barWeight            = val;
       _checkedIn.clear();
-      _attemptRound = 1;
+      _attemptRound         = 1;
+      _clockStart           = null;
+      _clockDuration        = null;
+      _clockPausedRemaining = null;
       _saveDisplayState();
     }
     renderMain();
@@ -1621,6 +1728,7 @@ const HM = (() => {
     if (val < minW) { alert(`Weight must be at least ${minW} lbs.`); return; }
     e[lift][idx].declared = val;
     _checkedIn.delete(e.id + ':' + idx);
+    if (_checkedIn.size === 0) { _clockStart = null; _clockDuration = null; _clockPausedRemaining = null; }
     _save();
     closeModal();
     renderMain();
@@ -1630,6 +1738,9 @@ const HM = (() => {
     const m = _meet(); if (!m) return;
     const e = m.entries.find(x => x.id === entryId); if (!e) return;
     e[lift].forEach(a => { if (a.result === null) a.result = 'miss'; });
+    // Remove all of this lifter's keys from checked-in set
+    for (let i = 0; i < 3; i++) _checkedIn.delete(e.id + ':' + i);
+    if (_checkedIn.size === 0) { _clockStart = null; _clockDuration = null; _clockPausedRemaining = null; }
     _save();
     renderMain();
   }
@@ -1662,8 +1773,11 @@ const HM = (() => {
     m.status = next;
     _save();
     _checkedIn.clear();
-    _attemptRound = 1;
-    _lastLift     = null;
+    _attemptRound         = 1;
+    _lastLift             = null;
+    _clockStart           = null;
+    _clockDuration        = null;
+    _clockPausedRemaining = null;
     if (next === 'complete') {
       _barWeight = null;
       _view = 'results';
@@ -1674,12 +1788,18 @@ const HM = (() => {
   }
 
   // ── Timer ──────────────────────────────────────────────────────────────────
+  function _syncTimer() {
+    _saveDisplayState();
+    if (_platformActive) window.liftbuilderApp?.directorTimerSync?.({ timerEndMs: _timerEndMs, timerPausedRem: _timerPausedRem });
+  }
+
   function startTimer(secs) {
     if (_timerInterval) { clearInterval(_timerInterval); _timerInterval = null; }
     _timerEndMs     = Date.now() + secs * 1000;
     _timerPausedRem = null;
     _timerInterval  = setInterval(_tickTimer, 250);
     _tickTimer();
+    _syncTimer();
   }
 
   function pauseResumeTimer() {
@@ -1695,18 +1815,59 @@ const HM = (() => {
     _tickTimer();
     const btn = document.querySelector('[onclick="HM.pauseResumeTimer()"]');
     if (btn) btn.textContent = (_timerEndMs !== null) ? 'Pause' : 'Resume';
+    _syncTimer();
   }
 
   function resetTimer() {
     if (_timerInterval) { clearInterval(_timerInterval); _timerInterval = null; }
     _timerEndMs     = null;
     _timerPausedRem = null;
+    _syncTimer();
     renderMain();
+  }
+
+  // ── Athlete clock controls (single-platform) ──────────────────────────────
+  function pauseClock() {
+    if (!_clockStart || !_clockDuration) return;
+    _clockPausedRemaining = Math.max(0, _clockDuration * 1000 - (Date.now() - _clockStart));
+    _clockStart = null;
+    _saveDisplayState();
+    renderMain();
+  }
+
+  function resumeClock() {
+    if (_clockPausedRemaining == null) return;
+    _clockStart           = Date.now() - (_clockDuration * 1000 - _clockPausedRemaining);
+    _clockPausedRemaining = null;
+    _saveDisplayState();
+    renderMain();
+  }
+
+  function resetClock() {
+    _clockStart           = null;
+    _clockDuration        = null;
+    _clockPausedRemaining = null;
+    _saveDisplayState();
+    renderMain();
+  }
+
+  // ── Athlete clock controls (multi-platform, director) ─────────────────────
+  async function directorPauseClock(pNum) {
+    await window.liftbuilderApp?.directorPauseClock?.(pNum);
+  }
+
+  async function directorResumeClock(pNum) {
+    await window.liftbuilderApp?.directorResumeClock?.(pNum);
+  }
+
+  async function directorResetClock(pNum) {
+    await window.liftbuilderApp?.directorResetClock?.(pNum);
   }
 
   function _onCompMounted() {
     if (_timerInterval) { clearInterval(_timerInterval); _timerInterval = null; }
     if (_timerEndMs) _timerInterval = setInterval(_tickTimer, 250);
+    _startClockTick();
   }
 
   function _tickTimer() {
@@ -1718,7 +1879,7 @@ const HM = (() => {
     const secs = Math.floor((rem % 60000) / 1000);
     el.textContent = mins + ':' + String(secs).padStart(2, '0');
     el.style.color = rem < 10000 ? '#E07070' : rem < 30000 ? '#C9A84C' : 'var(--white)';
-    if (rem === 0) { clearInterval(_timerInterval); _timerInterval = null; _timerEndMs = null; }
+    if (rem === 0) { clearInterval(_timerInterval); _timerInterval = null; _timerEndMs = null; _syncTimer(); }
   }
 
   function _setScoreTab(tab) { _scoreTab = tab; renderMain(); }
@@ -1940,6 +2101,8 @@ const HM = (() => {
     _platformInfo   = { ip: result.ip, port: result.port };
     // Listen for state updates from the server
     window.liftbuilderApp.onPlatformStateSync(_applyPlatformSync);
+    // Push current timer state to the server immediately
+    _syncTimer();
     renderMain();
     showToast(`Platforms live at ${result.ip}:${result.port}`);
   }
@@ -2151,11 +2314,14 @@ const HM = (() => {
   //  NAVIGATION
   // ══════════════════════════════════════════════════════════════════════════
   function openMeet(id) {
-    _activeMeetId = id;
-    _barWeight    = null;
+    _activeMeetId         = id;
+    _barWeight            = null;
     _checkedIn.clear();
-    _attemptRound = 1;
-    _lastLift     = null;
+    _attemptRound         = 1;
+    _lastLift             = null;
+    _clockStart           = null;
+    _clockDuration        = null;
+    _clockPausedRemaining = null;
     const m = _meet(); if (!m) return;
     if      (m.status === 'setup')     _view = 'setup';
     else if (m.status === 'weigh-in')  _view = 'weighin';
@@ -2166,7 +2332,13 @@ const HM = (() => {
 
   function backToList()    { autoSaveSetup(); _view = 'list';    renderMain(); }
   function backToSetup()   { _view = 'setup';   renderMain(); }
-  function backToWeighIn() { _view = 'weighin'; renderMain(); }
+  function backToWeighIn() {
+    _clockStart           = null;
+    _clockDuration        = null;
+    _clockPausedRemaining = null;
+    _view = 'weighin';
+    renderMain();
+  }
 
   function deleteMeet(id) {
     if (!confirm('Delete this meet and all its data? This cannot be undone.')) return;
@@ -2206,6 +2378,8 @@ const HM = (() => {
     setPlatformForEntry,
     startPlatforms, stopPlatforms,
     directorSetBarWeight, directorAdvanceRound, directorAdvancePhase, directorDeclareAttempt,
+    pauseClock, resumeClock, resetClock,
+    directorPauseClock, directorResumeClock, directorResetClock,
     showStats,
     printScoreboard, openDisplayWindow,
   };

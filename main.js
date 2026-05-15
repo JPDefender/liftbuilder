@@ -57,6 +57,8 @@ async function startPlatformServer(meetState) {
   _httpServer        = http.createServer(expressApp);
   _io                = new Server(_httpServer, { cors: { origin: '*' } });
   _platformMeetState = JSON.parse(JSON.stringify(meetState));
+  _platformMeetState.timerEndMs    = null;
+  _platformMeetState.timerPausedRem = null;
 
   // Initialise platformStates for any platform that doesn't have one yet
   if (!_platformMeetState.platformStates) _platformMeetState.platformStates = {};
@@ -98,15 +100,33 @@ async function startPlatformServer(meetState) {
 
     socket.on('set-bar-weight', ({ pNum, weight }) => {
       const ps = _getPS(pNum);
-      ps.barWeight = parseInt(weight) || null;
-      ps.checkedIn = [];
+      ps.barWeight            = parseInt(weight) || null;
+      ps.checkedIn            = [];
+      ps.clockStart           = null;
+      ps.clockDuration        = null;
+      ps.clockPausedRemaining = null;
       _broadcast();
     });
 
     socket.on('check-in', ({ pNum, entryId, attemptIdx }) => {
-      const ps  = _getPS(pNum);
-      const key = entryId + ':' + attemptIdx;
+      const ps       = _getPS(pNum);
+      const key      = entryId + ':' + attemptIdx;
+      const wasEmpty = ps.checkedIn.length === 0;
       if (!ps.checkedIn.includes(key)) ps.checkedIn.push(key);
+      // Silently update declared weight to current bar weight
+      if (ps.barWeight) {
+        const e    = _platformMeetState.entries.find(x => x.id === entryId);
+        const lift = ps.status;
+        if (e && e[lift]?.[attemptIdx]?.result === null) {
+          e[lift][attemptIdx].declared = ps.barWeight;
+        }
+      }
+      // Start clock when first lifter steps up
+      if (wasEmpty) {
+        const isFollowingSelf = _platformMeetState.lastLift?.entryId === entryId;
+        ps.clockDuration = isFollowingSelf ? 120 : 60;
+        ps.clockStart    = Date.now();
+      }
       _broadcast();
     });
 
@@ -114,6 +134,7 @@ async function startPlatformServer(meetState) {
       const ps  = _getPS(pNum);
       const key = entryId + ':' + attemptIdx;
       ps.checkedIn = ps.checkedIn.filter(k => k !== key);
+      if (ps.checkedIn.length === 0) { ps.clockStart = null; ps.clockDuration = null; ps.clockPausedRemaining = null; }
       _broadcast();
     });
 
@@ -133,6 +154,17 @@ async function startPlatformServer(meetState) {
       }
       m.lastLift = { entryId: e.id, name: e.name, schoolId: e.schoolId, wc: e.wc,
                      lift, declared: att.declared, result, attemptIdx, platform: pNum };
+      // Restart clock for next on-deck lifter, or clear if nobody left
+      if (ps.checkedIn.length > 0) {
+        const nextEntryId       = ps.checkedIn[0].split(':')[0];
+        ps.clockDuration        = nextEntryId === entryId ? 120 : 60;
+        ps.clockStart           = Date.now();
+        ps.clockPausedRemaining = null;
+      } else {
+        ps.clockStart           = null;
+        ps.clockDuration        = null;
+        ps.clockPausedRemaining = null;
+      }
       _broadcast();
     });
 
@@ -154,6 +186,7 @@ async function startPlatformServer(meetState) {
         if (e[lift][i].result === null) e[lift][i].result = 'miss';
       }
       ps.checkedIn = ps.checkedIn.filter(k => !k.startsWith(entryId + ':'));
+      if (ps.checkedIn.length === 0) { ps.clockStart = null; ps.clockDuration = null; ps.clockPausedRemaining = null; }
       _broadcast();
     });
 
@@ -164,6 +197,7 @@ async function startPlatformServer(meetState) {
       e[lift].forEach(a => { if (a.result === null) a.result = 'miss'; });
       const ps = _getPS(pNum);
       ps.checkedIn = ps.checkedIn.filter(k => !k.startsWith(entryId + ':'));
+      if (ps.checkedIn.length === 0) { ps.clockStart = null; ps.clockDuration = null; ps.clockPausedRemaining = null; }
       _broadcast();
     });
 
@@ -171,8 +205,11 @@ async function startPlatformServer(meetState) {
       const ps = _getPS(pNum);
       if (ps.attemptRound < 3) {
         ps.attemptRound++;
-        ps.checkedIn = [];
-        ps.barWeight = null;
+        ps.checkedIn            = [];
+        ps.barWeight            = null;
+        ps.clockStart           = null;
+        ps.clockDuration        = null;
+        ps.clockPausedRemaining = null;
       }
       _broadcast();
     });
@@ -194,10 +231,37 @@ async function startPlatformServer(meetState) {
       } else {
         next = 'complete';
       }
-      ps.status      = next;
-      ps.attemptRound = 1;
-      ps.barWeight   = null;
-      ps.checkedIn   = [];
+      ps.status               = next;
+      ps.attemptRound         = 1;
+      ps.barWeight            = null;
+      ps.checkedIn            = [];
+      ps.clockStart           = null;
+      ps.clockDuration        = null;
+      ps.clockPausedRemaining = null;
+      _broadcast();
+    });
+
+    socket.on('pause-clock', ({ pNum }) => {
+      const ps = _getPS(pNum);
+      if (!ps.clockStart || !ps.clockDuration) return;
+      ps.clockPausedRemaining = Math.max(0, ps.clockDuration * 1000 - (Date.now() - ps.clockStart));
+      ps.clockStart           = null;
+      _broadcast();
+    });
+
+    socket.on('resume-clock', ({ pNum }) => {
+      const ps = _getPS(pNum);
+      if (ps.clockPausedRemaining == null) return;
+      ps.clockStart           = Date.now() - (ps.clockDuration * 1000 - ps.clockPausedRemaining);
+      ps.clockPausedRemaining = null;
+      _broadcast();
+    });
+
+    socket.on('reset-clock', ({ pNum }) => {
+      const ps = _getPS(pNum);
+      ps.clockStart           = null;
+      ps.clockDuration        = null;
+      ps.clockPausedRemaining = null;
       _broadcast();
     });
   });
@@ -328,8 +392,11 @@ app.whenReady().then(() => {
   ipcMain.handle('director-set-bar-weight', (_e, { pNum, weight }) => {
     if (!_platformMeetState) return;
     const ps = _getPS(pNum);
-    ps.barWeight = parseInt(weight) || null;
-    ps.checkedIn = [];
+    ps.barWeight            = parseInt(weight) || null;
+    ps.checkedIn            = [];
+    ps.clockStart           = null;
+    ps.clockDuration        = null;
+    ps.clockPausedRemaining = null;
     _broadcast();
   });
 
@@ -338,9 +405,46 @@ app.whenReady().then(() => {
     const ps = _getPS(pNum);
     if (ps.attemptRound < 3) {
       ps.attemptRound++;
-      ps.checkedIn = [];
-      ps.barWeight = null;
+      ps.checkedIn            = [];
+      ps.barWeight            = null;
+      ps.clockStart           = null;
+      ps.clockDuration        = null;
+      ps.clockPausedRemaining = null;
     }
+    _broadcast();
+  });
+
+  ipcMain.handle('director-pause-clock', (_e, { pNum }) => {
+    if (!_platformMeetState) return;
+    const ps = _getPS(pNum);
+    if (!ps.clockStart || !ps.clockDuration) return;
+    ps.clockPausedRemaining = Math.max(0, ps.clockDuration * 1000 - (Date.now() - ps.clockStart));
+    ps.clockStart           = null;
+    _broadcast();
+  });
+
+  ipcMain.handle('director-resume-clock', (_e, { pNum }) => {
+    if (!_platformMeetState) return;
+    const ps = _getPS(pNum);
+    if (ps.clockPausedRemaining == null) return;
+    ps.clockStart           = Date.now() - (ps.clockDuration * 1000 - ps.clockPausedRemaining);
+    ps.clockPausedRemaining = null;
+    _broadcast();
+  });
+
+  ipcMain.handle('director-reset-clock', (_e, { pNum }) => {
+    if (!_platformMeetState) return;
+    const ps = _getPS(pNum);
+    ps.clockStart           = null;
+    ps.clockDuration        = null;
+    ps.clockPausedRemaining = null;
+    _broadcast();
+  });
+
+  ipcMain.handle('director-timer-sync', (_e, { timerEndMs, timerPausedRem }) => {
+    if (!_platformMeetState) return;
+    _platformMeetState.timerEndMs    = timerEndMs;
+    _platformMeetState.timerPausedRem = timerPausedRem;
     _broadcast();
   });
 
@@ -370,10 +474,12 @@ app.whenReady().then(() => {
     } else {
       next = 'complete';
     }
-    ps.status       = next;
-    ps.attemptRound = 1;
-    ps.barWeight    = null;
-    ps.checkedIn    = [];
+    ps.status        = next;
+    ps.attemptRound  = 1;
+    ps.barWeight     = null;
+    ps.checkedIn     = [];
+    ps.clockStart    = null;
+    ps.clockDuration = null;
     _broadcast();
   });
 

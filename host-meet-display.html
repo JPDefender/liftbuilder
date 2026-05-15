@@ -58,6 +58,7 @@
   #now-weight span { font-size: 28px; color: #666; }
   #now-attempt { font-size: 16px; color: #888; margin-top: 4px; }
   #now-dots { font-size: 22px; margin-top: 8px; }
+  #now-clock { font-size: 80px; font-weight: 700; color: #5EC08A; margin-top: 10px; letter-spacing: 2px; display: none; }
   #now-result { display: none; margin-top: 18px; }
   .result-badge {
     display: inline-block; border-radius: 8px; padding: 14px 28px;
@@ -117,6 +118,27 @@
   .team-pts { font-size: 28px; font-weight: 700; color: #C9A84C; }
 
   #no-meet { display: flex; align-items: center; justify-content: center; height: 100%; font-size: 24px; color: #333; }
+
+  /* Break timer card */
+  #break-card {
+    display: none;
+    background: #1a1a1a;
+    border: 2px solid #C9A84C;
+    border-radius: 10px;
+    padding: 28px 32px;
+    text-align: center;
+    flex-shrink: 0;
+  }
+  #break-card-label {
+    font-family: 'Barlow Condensed', Arial, sans-serif;
+    font-size: 13px; font-weight: 700; letter-spacing: 3px;
+    color: #C9A84C; margin-bottom: 8px;
+  }
+  #break-countdown {
+    font-family: 'Barlow Condensed', Arial, sans-serif;
+    font-size: 110px; font-weight: 700;
+    color: #C9A84C; line-height: 1; letter-spacing: 4px;
+  }
 </style>
 </head>
 <body>
@@ -136,10 +158,15 @@
       <div id="now-weight">— <span>lbs</span></div>
       <div id="now-attempt"></div>
       <div id="now-dots"></div>
+      <div id="now-clock"></div>
       <div id="now-result"></div>
     </div>
     <div id="waiting-msg" style="display:none;background:#1a1a1a;border:1px solid #333;border-radius:10px;padding:32px;text-align:center;">
       <div id="waiting-text" style="font-size:22px;color:#555;">Waiting for athletes to check in…</div>
+    </div>
+    <div id="break-card">
+      <div id="break-card-label">BREAK</div>
+      <div id="break-countdown">—</div>
     </div>
     <div id="queue-label">ON DECK</div>
     <div id="queue"></div>
@@ -263,16 +290,24 @@ function render(m, ds) {
   document.getElementById('no-meet').style.display = 'none';
   document.getElementById('main').style.display    = '';
 
+  // Reset clock before each render; conditionally re-enabled below when current lifter exists
+  const clockEl = document.getElementById('now-clock');
+  clockEl.dataset.clockStart    = '';
+  clockEl.dataset.clockDuration = '';
+  delete clockEl.dataset.clockPaused;
+  clockEl.style.display         = 'none';
+  clockEl.style.opacity         = '1';
+
   if (isComplete) {
     nowDiv.style.display     = 'none';
     waitingDiv.style.display = 'none';
-    phaseDone.style.display  = '';
+    phaseDone.style.display  = 'block';
     document.getElementById('phase-done-text').textContent = 'Meet Complete';
     queueDiv.innerHTML = '';
   } else if (phaseComplete) {
     nowDiv.style.display     = 'none';
     waitingDiv.style.display = 'none';
-    phaseDone.style.display  = '';
+    phaseDone.style.display  = 'block';
     document.getElementById('phase-done-text').textContent = (STATUS_LABEL[lift]||lift) + ' phase complete';
     queueDiv.innerHTML = '';
   } else if (!current) {
@@ -298,7 +333,7 @@ function render(m, ds) {
       document.getElementById('now-attempt').textContent = STATUS_LABEL[lastLift.lift] || lastLift.lift;
       document.getElementById('now-dots').innerHTML      = prevEntry ? _dots(prevEntry[lastLift.lift], -1) : '';
       const resultEl = document.getElementById('now-result');
-      resultEl.style.display = '';
+      resultEl.style.display = 'block';
       resultEl.innerHTML = lastLift.result === 'good'
         ? '<div class="result-badge good">✓ GOOD LIFT</div>'
         : '<div class="result-badge miss">✗ NO LIFT</div>';
@@ -326,6 +361,18 @@ function render(m, ds) {
     document.getElementById('now-weight').innerHTML      = att.declared + ' <span>lbs</span>';
     document.getElementById('now-attempt').textContent   = ordinal + ' attempt — ' + (STATUS_LABEL[lift]||lift);
     document.getElementById('now-dots').innerHTML        = _dots(current[lift], idx);
+    if(ds.clockPausedRemaining != null) {
+      clockEl.dataset.clockPaused = ds.clockPausedRemaining;
+      clockEl.style.display   = 'block';
+      clockEl.style.opacity   = '0.6';
+    } else if(ds.clockStart) {
+      clockEl.dataset.clockStart    = ds.clockStart;
+      clockEl.dataset.clockDuration = ds.clockDuration;
+      clockEl.style.display = 'block';
+      clockEl.style.opacity = '1';
+    } else {
+      clockEl.style.display = 'none';
+    }
 
     queueDiv.innerHTML = onDeck.map((e, qi) => {
       const qi_idx  = _curIdx(e, lift);
@@ -429,6 +476,57 @@ function poll() {
     console.error('Display poll error:', e);
   }
 }
+
+// Tick the countdown clock at 200ms independently of the 750ms poll
+setInterval(()=>{
+  const el = document.getElementById('now-clock');
+  if(!el || el.style.display==='none') return;
+  if(el.dataset.clockPaused !== undefined && el.dataset.clockPaused !== '') {
+    const rem  = Math.max(0, parseInt(el.dataset.clockPaused));
+    const mins = Math.floor(rem / 60000);
+    const secs = Math.floor((rem % 60000) / 1000);
+    el.textContent = mins + ':' + String(secs).padStart(2,'0');
+    el.style.color = rem <= 10000 ? '#E07070' : rem <= 30000 ? '#E0A040' : '#5EC08A';
+    return;
+  }
+  const start    = parseInt(el.dataset.clockStart);
+  const duration = parseInt(el.dataset.clockDuration);
+  if(!start || !duration) return;
+  const rem  = Math.max(0, duration * 1000 - (Date.now() - start));
+  const mins = Math.floor(rem / 60000);
+  const secs = Math.floor((rem % 60000) / 1000);
+  el.textContent = mins + ':' + String(secs).padStart(2,'0');
+  el.style.color = rem <= 10000 ? '#E07070' : rem <= 30000 ? '#E0A040' : '#5EC08A';
+}, 200);
+
+// Tick the break timer at 250ms (reads localStorage directly for reliability)
+setInterval(()=>{
+  const card      = document.getElementById('break-card');
+  const countdown = document.getElementById('break-countdown');
+  if(!card || !countdown) return;
+  let ds = null;
+  try { const r = localStorage.getItem(DISPLAY_STATE_KEY); if(r) ds = JSON.parse(r); } catch(e) {}
+  const endMs  = ds?.timerEndMs;
+  const paused = ds?.timerPausedRem;
+  let rem = null;
+  if(paused != null) {
+    rem = Math.max(0, paused);
+  } else if(endMs) {
+    rem = Math.max(0, endMs - Date.now());
+  }
+  if(rem !== null) {
+    const mins  = Math.floor(rem / 60000);
+    const secs  = Math.floor((rem % 60000) / 1000);
+    const color = rem < 10000 ? '#E07070' : rem < 30000 ? '#E0A040' : '#C9A84C';
+    countdown.textContent = mins + ':' + String(secs).padStart(2,'0');
+    countdown.style.color = color;
+    card.style.borderColor = color;
+    card.style.display    = 'block';
+    card.style.opacity    = (paused != null) ? '0.7' : '1';
+  } else {
+    card.style.display = 'none';
+  }
+}, 250);
 
 setInterval(poll, 750);
 poll();

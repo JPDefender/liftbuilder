@@ -20,4 +20,8 @@ contextBridge.exposeInMainWorld('liftbuilderApp', {
   directorAdvanceRound:   (pNum)                              => ipcRenderer.invoke('director-advance-round',   { pNum }),
   directorAdvancePhase:   (pNum)                              => ipcRenderer.invoke('director-advance-phase',   { pNum }),
   directorDeclareAttempt: (entryId, lift, attemptIdx, weight) => ipcRenderer.invoke('director-declare-attempt', { entryId, lift, attemptIdx, weight }),
+  directorPauseClock:  (pNum) => ipcRenderer.invoke('director-pause-clock',  { pNum }),
+  directorResumeClock: (pNum) => ipcRenderer.invoke('director-resume-clock', { pNum }),
+  directorResetClock:  (pNum) => ipcRenderer.invoke('director-reset-clock',  { pNum }),
+  directorTimerSync:   (data) => ipcRenderer.invoke('director-timer-sync',   data),
 });

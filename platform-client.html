@@ -59,6 +59,7 @@ body{background:var(--dark);color:var(--white);font-family:Arial,sans-serif;heig
 #now-weight span{font-size:24px;color:#555;}
 #now-ordinal{font-size:14px;color:var(--muted);margin-top:4px;}
 #now-dots{font-size:20px;margin-top:8px;}
+#now-clock{font-family:'Barlow Condensed',Arial,sans-serif;font-size:64px;font-weight:700;color:var(--green);margin-top:10px;letter-spacing:2px;display:none;}
 #now-actions{display:flex;gap:12px;margin-top:16px;flex-wrap:wrap;}
 
 /* ── Tables ── */
@@ -121,6 +122,7 @@ td{border-bottom:1px solid var(--dark3);}
   <div id="hdr-meet">Connecting…</div>
   <div id="hdr-phase">—</div>
   <div id="hdr-bar"></div>
+  <div id="hdr-timer" style="display:none;font-family:'Barlow Condensed',Arial,sans-serif;font-size:20px;font-weight:700;letter-spacing:1px;padding:3px 12px;border-radius:4px;background:rgba(201,168,76,.15);color:var(--gold);"></div>
   <div id="conn-badge" class="off">OFFLINE</div>
 </div>
 
@@ -145,6 +147,12 @@ td{border-bottom:1px solid var(--dark3);}
       <div id="now-weight">— <span>lbs</span></div>
       <div id="now-ordinal"></div>
       <div id="now-dots"></div>
+      <div id="now-clock"></div>
+      <div id="now-clock-controls" style="display:none;margin-top:6px;gap:8px;flex-wrap:wrap;align-items:center;">
+        <button id="btn-clock-pause"  onclick="pauseClock()"  style="font-family:'Barlow Condensed',Arial,sans-serif;font-size:14px;font-weight:700;padding:5px 14px;border:2px solid #E0A040;color:#E0A040;background:none;border-radius:5px;cursor:pointer;">⏸ Pause</button>
+        <button id="btn-clock-resume" onclick="resumeClock()" style="font-family:'Barlow Condensed',Arial,sans-serif;font-size:14px;font-weight:700;padding:5px 14px;border:2px solid #5EC08A;color:#5EC08A;background:none;border-radius:5px;cursor:pointer;display:none;">▶ Resume</button>
+        <button id="btn-clock-reset"  onclick="resetClock()"  style="font-family:'Barlow Condensed',Arial,sans-serif;font-size:14px;font-weight:700;padding:5px 14px;border:2px solid #E07070;color:#E07070;background:none;border-radius:5px;cursor:pointer;">✕ Reset</button>
+      </div>
       <div id="now-result" style="display:none;margin-top:14px;"></div>
       <div id="now-actions">
         <button class="btn-good" id="btn-good" onclick="recordResult('good')">✓ GOOD LIFT</button>
@@ -368,7 +376,7 @@ function render(){
   const m   = _meet;
   const ps  = _ps;
   const lift = ps.status || m.status;
-  const ar   = ps.attemptRound || 1;
+  const ar   = ps.attemptRound || 1;  // director-unlocked attempt tier (1, 2, or 3)
   const bw   = ps.barWeight    || null;
   const ciSet = new Set(ps.checkedIn || []);
 
@@ -380,11 +388,11 @@ function render(){
   if(bw){ barBadge.style.display=''; barBadge.textContent='BAR: '+bw+' lbs'; }
   else   { barBadge.style.display='none'; }
 
-  // Round badge
+  // Round badge + unlock button
   document.getElementById('round-badge').textContent = (ORDINALS[ar-1]||ar+'th')+' Attempt';
   const nrBtn = document.getElementById('next-round-btn');
   if(ar<3){ nrBtn.style.display=''; nrBtn.textContent='→ '+(ORDINALS[ar]||'Next')+' Attempt'; }
-  else      { nrBtn.style.display='none'; }
+  else     { nrBtn.style.display='none'; }
 
   // Filter entries to this platform
   const pEntries = m.entries.filter(e=>e.platform===platformNum);
@@ -397,13 +405,14 @@ function render(){
   document.getElementById('main').style.display='';
   document.getElementById('no-data').style.display='none';
 
-  const elig     = pEntries.filter(e=>_eligibleForLift(e,lift)&&_curIdx(e,lift)>=0);
+  const elig      = pEntries.filter(e=>_eligibleForLift(e,lift)&&_curIdx(e,lift)>=0);
   const checkedIn = elig.filter(e=>ciSet.has(e.id+':'+_curIdx(e,lift)));
   const waiting   = elig
     .filter(e=>!ciSet.has(e.id+':'+_curIdx(e,lift)))
     .sort((a,b)=>{
-      const canA=bw&&_curIdx(a,lift)===ar-1&&!_checkInBlocked(a,lift,bw)?0:1;
-      const canB=bw&&_curIdx(b,lift)===ar-1&&!_checkInBlocked(b,lift,bw)?0:1;
+      const idxA=_curIdx(a,lift); const idxB=_curIdx(b,lift);
+      const canA=bw&&idxA===ar-1&&!_checkInBlocked(a,lift,bw)?0:1;
+      const canB=bw&&idxB===ar-1&&!_checkInBlocked(b,lift,bw)?0:1;
       return canA-canB;
     });
   const done      = pEntries.filter(e=>_eligibleForLift(e,lift)&&_curIdx(e,lift)<0);
@@ -437,6 +446,11 @@ function render(){
     document.getElementById('now-label').style.color='var(--gold)';
     document.getElementById('now-result').style.display='none';
     document.getElementById('now-actions').style.display='';
+    // Clock visibility + controls handled by 200ms interval; force hide if no clock data
+    if(!ps.clockStart && ps.clockPausedRemaining == null) {
+      document.getElementById('now-clock').style.display='none';
+      document.getElementById('now-clock-controls').style.display='none';
+    }
     const idx   = _curIdx(current,lift);
     const att   = current[lift][idx];
     const sch   = m.schools.find(s=>s.id===current.schoolId);
@@ -605,6 +619,75 @@ function render(){
 document.getElementById('bar-input').addEventListener('keydown', e=>{
   if(e.key==='Enter') setBarWeight();
 });
+
+// ── Break timer display in header ────────────────────────────────────────────
+setInterval(()=>{
+  const el = document.getElementById('hdr-timer');
+  if(!el) return;
+  const endMs  = _meet?.timerEndMs;
+  const paused = _meet?.timerPausedRem;
+  if(paused != null) {
+    const rem  = Math.max(0, paused);
+    const mins = Math.floor(rem / 60000);
+    const secs = Math.floor((rem % 60000) / 1000);
+    el.textContent   = '⏱ ' + mins + ':' + String(secs).padStart(2,'0');
+    el.style.display = '';
+    el.style.color   = rem < 10000 ? 'var(--red)' : rem < 30000 ? '#E0A040' : 'var(--gold)';
+    el.style.opacity = '0.6';
+  } else if(endMs) {
+    const rem  = Math.max(0, endMs - Date.now());
+    const mins = Math.floor(rem / 60000);
+    const secs = Math.floor((rem % 60000) / 1000);
+    el.textContent   = '⏱ ' + mins + ':' + String(secs).padStart(2,'0');
+    el.style.display = '';
+    el.style.color   = rem < 10000 ? 'var(--red)' : rem < 30000 ? '#E0A040' : 'var(--gold)';
+    el.style.opacity = '1';
+  } else {
+    el.style.display = 'none';
+  }
+}, 250);
+
+// ── Countdown clock ──────────────────────────────────────────────────────────
+setInterval(()=>{
+  const el       = document.getElementById('now-clock');
+  const controls = document.getElementById('now-clock-controls');
+  const btnPause  = document.getElementById('btn-clock-pause');
+  const btnResume = document.getElementById('btn-clock-resume');
+  if(!el) return;
+  const paused   = _ps?.clockPausedRemaining;
+  const start    = _ps?.clockStart;
+  const duration = _ps?.clockDuration;
+  if(paused != null) {
+    const rem  = Math.max(0, paused);
+    const mins = Math.floor(rem / 60000);
+    const secs = Math.floor((rem % 60000) / 1000);
+    el.textContent   = mins + ':' + String(secs).padStart(2,'0');
+    el.style.display = 'block';
+    el.style.color   = rem <= 10000 ? 'var(--red)' : rem <= 30000 ? '#E0A040' : 'var(--green)';
+    el.style.opacity = '0.6';
+    if(controls){ controls.style.display='flex'; }
+    if(btnPause)  btnPause.style.display  = 'none';
+    if(btnResume) btnResume.style.display = 'block';
+  } else if(start && duration) {
+    const rem  = Math.max(0, duration * 1000 - (Date.now() - start));
+    const mins = Math.floor(rem / 60000);
+    const secs = Math.floor((rem % 60000) / 1000);
+    el.textContent   = mins + ':' + String(secs).padStart(2,'0');
+    el.style.display = 'block';
+    el.style.color   = rem <= 10000 ? 'var(--red)' : rem <= 30000 ? '#E0A040' : 'var(--green)';
+    el.style.opacity = '1';
+    if(controls){ controls.style.display='flex'; }
+    if(btnPause)  btnPause.style.display  = 'block';
+    if(btnResume) btnResume.style.display = 'none';
+  } else {
+    el.style.display = 'none';
+    if(controls) controls.style.display='none';
+  }
+}, 200);
+
+function pauseClock()  { socket.emit('pause-clock',  { pNum: platformNum }); }
+function resumeClock() { socket.emit('resume-clock', { pNum: platformNum }); }
+function resetClock()  { socket.emit('reset-clock',  { pNum: platformNum }); }
 </script>
 </body>
 </html>
