@@ -229,7 +229,7 @@
 'use strict';
 
 const platformNum = parseInt(location.pathname.split('/').pop()) || 1;
-const _meetToken  = new URLSearchParams(location.search).get('token') || '';
+const _meetToken  = new URLSearchParams(location.search).get('pin') || '';
 const socket      = io({ auth: { token: _meetToken } });
 
 // ── QR code (generated once on load) ─────────────────────────────────────────

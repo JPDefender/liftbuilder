@@ -78,7 +78,7 @@ async function startPlatformServer(meetState) {
   const { Server }   = require('socket.io');
   const expressApp   = express();
   _httpServer        = http.createServer(expressApp);
-  _sessionToken      = crypto.randomBytes(24).toString('hex');
+  _sessionToken      = String(Math.floor(100000 + Math.random() * 900000));
 
   const localIP      = getLocalIP();
   const allowedOrigins = [

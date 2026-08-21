@@ -124,7 +124,7 @@ td{border-bottom:1px solid var(--dark3);}
   <div id="hdr-phase">—</div>
   <div id="hdr-bar"></div>
   <div id="hdr-timer" style="display:none;font-family:'Barlow Condensed',Arial,sans-serif;font-size:20px;font-weight:700;letter-spacing:1px;padding:3px 12px;border-radius:4px;background:rgba(201,168,76,.15);color:var(--gold);"></div>
-  <button onclick="window.open('/display/'+platformNum+(_meetToken?'?token='+encodeURIComponent(_meetToken):''),'_blank')" style="font-size:11px;font-family:'Barlow Condensed',Arial,sans-serif;font-weight:700;padding:3px 10px;border:1px solid rgba(94,192,138,.4);border-radius:4px;background:none;color:#5EC08A;cursor:pointer;letter-spacing:.5px;">📺 Display</button>
+  <button onclick="window.open('/display/'+platformNum+(_meetToken?'?pin='+_meetToken:''),'_blank')" style="font-size:11px;font-family:'Barlow Condensed',Arial,sans-serif;font-weight:700;padding:3px 10px;border:1px solid rgba(94,192,138,.4);border-radius:4px;background:none;color:#5EC08A;cursor:pointer;letter-spacing:.5px;">📺 Display</button>
   <div id="conn-badge" class="off">OFFLINE</div>
 </div>
 
@@ -248,7 +248,7 @@ td{border-bottom:1px solid var(--dark3);}
 'use strict';
 
 const platformNum  = parseInt(location.pathname.split('/').pop()) || 1;
-const _meetToken   = new URLSearchParams(location.search).get('token') || '';
+const _meetToken   = new URLSearchParams(location.search).get('pin') || '';
 const socket       = io({ auth: { token: _meetToken } });
 
 const STATUS_LABEL = { snatch:'Snatch', cj:'Clean & Jerk', bench:'Bench', complete:'Complete' };

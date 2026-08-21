@@ -777,7 +777,7 @@ const HM = (() => {
       <img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" style="display:none" onload="HM._onCompMounted()">
       ${_platformActive && _platformInfo ? (() => {
         const base = `http://${_platformInfo.ip}:${_platformInfo.port}`;
-        const tok  = _platformInfo.token ? `?token=${encodeURIComponent(_platformInfo.token)}` : '';
+        const tok  = _platformInfo.token ? `?pin=${_platformInfo.token}` : '';
         const allComplete = Array.from({length: m.numPlatforms}, (_, i) => i + 1)
           .every(n => (m.platformStates?.[n]?.status || m.status) === 'complete');
 
@@ -826,15 +826,25 @@ const HM = (() => {
                 <div style="display:flex;align-items:center;gap:8px;">
                   ${connDot}
                   <button onclick="window.open('${base}/platform/${pNum}${tok}')"
-                    style="font-size:10px;font-family:'Barlow Condensed',sans-serif;font-weight:600;color:var(--gold);background:none;cursor:pointer;padding:2px 7px;border:1px solid var(--gold-a50);border-radius:3px;">Open ↗</button>
+                    style="font-size:10px;font-family:'Barlow Condensed',sans-serif;font-weight:600;color:var(--gold);background:none;cursor:pointer;padding:2px 7px;border:1px solid var(--gold-a50);border-radius:3px 0 0 3px;">Open ↗</button>
+                  <button onclick="HM.copyLink('${base}/platform/${pNum}${tok}')" title="Copy platform link"
+                    style="font-size:10px;font-family:'Barlow Condensed',sans-serif;font-weight:600;color:var(--gold);background:none;cursor:pointer;padding:2px 5px;border:1px solid var(--gold-a50);border-left:none;border-radius:0 3px 3px 0;margin-right:4px;">📋</button>
                   <button onclick="window.open('${base}/display/${pNum}${tok}')"
-                    style="font-size:10px;font-family:'Barlow Condensed',sans-serif;font-weight:600;color:#5EC08A;background:none;cursor:pointer;padding:2px 7px;border:1px solid rgba(94,192,138,.4);border-radius:3px;">📺 Display ↗</button>
+                    style="font-size:10px;font-family:'Barlow Condensed',sans-serif;font-weight:600;color:#5EC08A;background:none;cursor:pointer;padding:2px 7px;border:1px solid rgba(94,192,138,.4);border-radius:3px 0 0 3px;">📺 Display</button>
+                  <button onclick="HM.copyLink('${base}/display/${pNum}${tok}')" title="Copy display link"
+                    style="font-size:10px;font-family:'Barlow Condensed',sans-serif;font-weight:600;color:#5EC08A;background:none;cursor:pointer;padding:2px 5px;border:1px solid rgba(94,192,138,.4);border-left:none;border-radius:0 3px 3px 0;margin-right:4px;">📋</button>
                   <button onclick="window.open('${base}/referee/${pNum}/1${tok}')"
-                    style="font-size:10px;font-family:'Barlow Condensed',sans-serif;font-weight:600;color:#A07FD4;background:none;cursor:pointer;padding:2px 7px;border:1px solid rgba(160,127,212,.4);border-radius:3px;">⚖ J1</button>
+                    style="font-size:10px;font-family:'Barlow Condensed',sans-serif;font-weight:600;color:#A07FD4;background:none;cursor:pointer;padding:2px 7px;border:1px solid rgba(160,127,212,.4);border-radius:3px 0 0 3px;">⚖ J1</button>
+                  <button onclick="HM.copyLink('${base}/referee/${pNum}/1${tok}')" title="Copy Judge 1 link"
+                    style="font-size:10px;font-family:'Barlow Condensed',sans-serif;font-weight:600;color:#A07FD4;background:none;cursor:pointer;padding:2px 5px;border:1px solid rgba(160,127,212,.4);border-left:none;border-radius:0 3px 3px 0;">📋</button>
                   <button onclick="window.open('${base}/referee/${pNum}/2${tok}')"
-                    style="font-size:10px;font-family:'Barlow Condensed',sans-serif;font-weight:600;color:#A07FD4;background:none;cursor:pointer;padding:2px 7px;border:1px solid rgba(160,127,212,.4);border-radius:3px;">⚖ J2</button>
+                    style="font-size:10px;font-family:'Barlow Condensed',sans-serif;font-weight:600;color:#A07FD4;background:none;cursor:pointer;padding:2px 7px;border:1px solid rgba(160,127,212,.4);border-radius:3px 0 0 3px;">⚖ J2</button>
+                  <button onclick="HM.copyLink('${base}/referee/${pNum}/2${tok}')" title="Copy Judge 2 link"
+                    style="font-size:10px;font-family:'Barlow Condensed',sans-serif;font-weight:600;color:#A07FD4;background:none;cursor:pointer;padding:2px 5px;border:1px solid rgba(160,127,212,.4);border-left:none;border-radius:0 3px 3px 0;">📋</button>
                   <button onclick="window.open('${base}/referee/${pNum}/3${tok}')"
-                    style="font-size:10px;font-family:'Barlow Condensed',sans-serif;font-weight:600;color:#A07FD4;background:none;cursor:pointer;padding:2px 7px;border:1px solid rgba(160,127,212,.4);border-radius:3px;">⚖ J3</button>
+                    style="font-size:10px;font-family:'Barlow Condensed',sans-serif;font-weight:600;color:#A07FD4;background:none;cursor:pointer;padding:2px 7px;border:1px solid rgba(160,127,212,.4);border-radius:3px 0 0 3px;">⚖ J3</button>
+                  <button onclick="HM.copyLink('${base}/referee/${pNum}/3${tok}')" title="Copy Judge 3 link"
+                    style="font-size:10px;font-family:'Barlow Condensed',sans-serif;font-weight:600;color:#A07FD4;background:none;cursor:pointer;padding:2px 5px;border:1px solid rgba(160,127,212,.4);border-left:none;border-radius:0 3px 3px 0;">📋</button>
                 </div>
               </div>
 
@@ -930,15 +940,26 @@ const HM = (() => {
         return `
           <div style="display:grid;grid-template-columns:3fr 2fr;gap:1.25rem;align-items:start;">
             <div>
-              <div style="display:flex;align-items:center;gap:10px;margin-bottom:.4rem;flex-wrap:wrap;">
-                <span style="font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;letter-spacing:1.5px;color:#5EC08A;">📡 PLATFORMS ACTIVE</span>
-                <code style="font-size:11px;background:var(--dark3);padding:2px 8px;border-radius:3px;color:var(--white);">${base}/platform/<em>N</em></code>
-                <span style="font-size:11px;color:var(--muted);">${_connectedPlatforms.length} of ${m.numPlatforms} connected</span>
-                <a href="#" onclick="event.preventDefault();window.open('${base}/scoreboard${tok}')" style="font-size:11px;color:var(--gold);text-decoration:none;border:1px solid var(--gold-a50);border-radius:3px;padding:1px 8px;font-family:'Barlow Condensed',sans-serif;font-weight:700;">📊 Scoreboard ↗</a>
-              </div>
-              <div style="display:flex;align-items:center;gap:10px;margin-bottom:.75rem;flex-wrap:wrap;">
-                <span style="font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;letter-spacing:1.5px;color:#A07FD4;">⚖ JUDGES</span>
-                <code style="font-size:11px;background:var(--dark3);padding:2px 8px;border-radius:3px;color:var(--white);">${base}/referee/<em>N</em>/<em>1-3</em></code>
+              <div style="background:rgba(201,168,76,.08);border:1px solid rgba(201,168,76,.3);border-radius:10px;padding:14px 18px;margin-bottom:.85rem;display:flex;align-items:center;gap:20px;flex-wrap:wrap;">
+                <div>
+                  <div style="font-size:10px;font-weight:700;letter-spacing:1.5px;color:var(--muted);margin-bottom:3px;">CONNECT AT</div>
+                  <div style="font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:700;color:var(--white);">${base}</div>
+                </div>
+                <div style="width:1px;height:36px;background:rgba(201,168,76,.25);flex-shrink:0;"></div>
+                <div>
+                  <div style="font-size:10px;font-weight:700;letter-spacing:1.5px;color:var(--muted);margin-bottom:2px;">PIN</div>
+                  <div style="font-family:'Barlow Condensed',sans-serif;font-size:38px;font-weight:900;letter-spacing:8px;color:var(--gold);line-height:1;">${_platformInfo.token}</div>
+                </div>
+                <div style="width:1px;height:36px;background:rgba(201,168,76,.25);flex-shrink:0;"></div>
+                <div style="font-size:11px;color:var(--muted);line-height:1.6;">
+                  <div><span style="color:var(--white);font-weight:600;">Platform:</span> /platform/<em>N</em>?pin=${_platformInfo.token}</div>
+                  <div><span style="color:var(--white);font-weight:600;">Judge:</span> /referee/<em>N</em>/<em>1-3</em>?pin=${_platformInfo.token}</div>
+                  <div><span style="color:var(--white);font-weight:600;">Display:</span> /display/<em>N</em>?pin=${_platformInfo.token}</div>
+                </div>
+                <div style="margin-left:auto;display:flex;flex-direction:column;gap:6px;align-items:flex-end;">
+                  <span style="font-size:11px;color:${_connectedPlatforms.length>0?'#5EC08A':'var(--muted)'};">${_connectedPlatforms.length} of ${m.numPlatforms} connected</span>
+                  <a href="#" onclick="event.preventDefault();window.open('${base}/scoreboard${tok}')" style="font-size:11px;color:var(--gold);text-decoration:none;border:1px solid var(--gold-a50);border-radius:3px;padding:2px 10px;font-family:'Barlow Condensed',sans-serif;font-weight:700;">📊 Scoreboard ↗</a>
+                </div>
               </div>
               ${allComplete ? `
                 <div style="background:rgba(94,192,138,.1);border:2px solid #5EC08A;border-radius:8px;padding:14px 18px;margin-bottom:1rem;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
@@ -2266,6 +2287,10 @@ const HM = (() => {
     showToast(`Platforms live at ${result.ip}:${result.port}`);
   }
 
+  function copyLink(url) {
+    navigator.clipboard.writeText(url).then(() => showToast('Link copied!')).catch(() => showToast('Copy failed — check browser permissions'));
+  }
+
   async function stopPlatforms() {
     if (!confirm('Stop all platforms? Connected clients will be disconnected.')) return;
     await window.liftbuilderApp?.stopPlatformServer?.();
@@ -2657,7 +2682,7 @@ const HM = (() => {
     // Phase 3
     toggleFlights, setEntryFlight, _setFlight,
     setPlatformForEntry,
-    startPlatforms, stopPlatforms,
+    startPlatforms, stopPlatforms, copyLink,
     directorSetBarWeight, directorAdvanceRound, directorAdvancePhase, directorDeclareAttempt,
     pauseClock, resumeClock, resetClock,
     directorPauseClock, directorResumeClock, directorResetClock,

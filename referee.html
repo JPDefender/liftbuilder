@@ -148,7 +148,7 @@ document.getElementById('platform-badge').textContent = 'Platform ' + platformNu
 
 const STATUS_LABEL = { snatch:'Snatch', cj:'Clean & Jerk', bench:'Bench', complete:'Complete' };
 
-const _meetToken = new URLSearchParams(location.search).get('token') || '';
+const _meetToken = new URLSearchParams(location.search).get('pin') || '';
 const socket     = io({ auth: { token: _meetToken } });
 let _meet     = null;
 let _ps       = null;

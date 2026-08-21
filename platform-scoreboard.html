@@ -97,7 +97,7 @@ body{background:var(--dark);color:var(--white);font-family:Arial,sans-serif;min-
 <script>
 'use strict';
 
-const _meetToken = new URLSearchParams(location.search).get('token') || '';
+const _meetToken = new URLSearchParams(location.search).get('pin') || '';
 const socket     = io({ auth: { token: _meetToken } });
 let _meet = null;
 
