@@ -116,6 +116,7 @@ function _eligibleForLift(e,lift){
 function _bestMade(atts){ const w=atts.filter(a=>a.result==='good').map(a=>a.declared); return w.length?Math.max(...w):0; }
 function _olympicTotal(e){ const s=_bestMade(e.snatch),c=_bestMade(e.cj); return s>0&&c>0?s+c:0; }
 function _traditionalTotal(e){ const c=_bestMade(e.cj),b=_bestMade(e.bench); return c>0&&b>0?c+b:0; }
+function _rankCmp(a,b){ if(b.tot!==a.tot) return b.tot-a.tot; const wA=parseFloat(a.e.weighIn)||parseFloat(a.e.wc)||999, wB=parseFloat(b.e.weighIn)||parseFloat(b.e.wc)||999; return wA-wB; }
 function _teamPoints(N){
   if(N>=5) return [7,5,4,3,2,1];
   if(N===4) return [6,4,3,2,1];
@@ -178,7 +179,7 @@ function render(){
     if(!usedWcs.length) return '';
     let html=`<div class="section-hd">${label}</div>`;
     html+=usedWcs.map(wc=>{
-      const grp=elig.filter(e=>e.wc===wc).map(e=>({e,tot:totFn(e)})).sort((a,b)=>b.tot-a.tot);
+      const grp=elig.filter(e=>e.wc===wc).map(e=>({e,tot:totFn(e)})).sort(_rankCmp);
       let placed=0;
       return `<div class="wc-block"><div class="wc-hd">${wc} LBS</div>`+
         grp.map(r=>{
@@ -207,11 +208,11 @@ function render(){
   const sc  = {};
   (m.schools||[]).forEach(s=>{ sc[s.id]={name:s.name,olympic:0,traditional:0}; });
   wcs.filter(wc=>oElig.some(e=>e.wc===wc)).forEach(wc=>{
-    const grp=oElig.filter(e=>e.wc===wc).map(e=>({e,tot:_olympicTotal(e)})).sort((a,b)=>b.tot-a.tot);
+    const grp=oElig.filter(e=>e.wc===wc).map(e=>({e,tot:_olympicTotal(e)})).sort(_rankCmp);
     let p=0; grp.forEach(r=>{ if(r.tot>0&&sc[r.e.schoolId]&&p<pts.length) sc[r.e.schoolId].olympic+=pts[p++]; });
   });
   wcs.filter(wc=>tElig.some(e=>e.wc===wc)).forEach(wc=>{
-    const grp=tElig.filter(e=>e.wc===wc).map(e=>({e,tot:_traditionalTotal(e)})).sort((a,b)=>b.tot-a.tot);
+    const grp=tElig.filter(e=>e.wc===wc).map(e=>({e,tot:_traditionalTotal(e)})).sort(_rankCmp);
     let p=0; grp.forEach(r=>{ if(r.tot>0&&sc[r.e.schoolId]&&p<pts.length) sc[r.e.schoolId].traditional+=pts[p++]; });
   });
   const sorted=Object.values(sc).map(s=>({...s,total:s.olympic+s.traditional})).sort((a,b)=>b.total-a.total);

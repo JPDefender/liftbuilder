@@ -153,6 +153,14 @@ const HM = (() => {
     return (c > 0 && b > 0) ? c + b : 0;
   }
 
+  // Tiebreak: higher total wins; if equal, lower body weight wins (lighter athlete places higher).
+  function _rankCmp(a, b) {
+    if (b.tot !== a.tot) return b.tot - a.tot;
+    const wA = parseFloat(a.e.weighIn) || parseFloat(a.e.wc) || 999;
+    const wB = parseFloat(b.e.weighIn) || parseFloat(b.e.wc) || 999;
+    return wA - wB;
+  }
+
   function _dots(attempts, curIdx) {
     return attempts.map((a, i) => {
       let col, sym;
@@ -1046,7 +1054,7 @@ const HM = (() => {
         : wcs.filter(wc => elig.some(e => e.wc === wc)).map(wc => {
             const group = elig.filter(e => e.wc === wc)
               .map(e => ({ e, sn: _bestMade(e.snatch), cj: _bestMade(e.cj), tot: _olympicTotal(e) }))
-              .sort((a,b) => b.tot - a.tot || b.sn - a.sn);
+              .sort(_rankCmp);
             let pIdx = -1;
             const rows = group.map(r => {
               if (r.tot > 0) pIdx++;
@@ -1078,7 +1086,7 @@ const HM = (() => {
         : wcs.filter(wc => elig.some(e => e.wc === wc)).map(wc => {
             const group = elig.filter(e => e.wc === wc)
               .map(e => ({ e, cj: _bestMade(e.cj), bn: _bestMade(e.bench), tot: _traditionalTotal(e) }))
-              .sort((a,b) => b.tot - a.tot || b.cj - a.cj);
+              .sort(_rankCmp);
             let pIdx = -1;
             const rows = group.map(r => {
               if (r.tot > 0) pIdx++;
@@ -1111,7 +1119,7 @@ const HM = (() => {
       wcs.filter(wc => oElig.some(e => e.wc === wc)).forEach(wc => {
         const grp = oElig.filter(e => e.wc === wc)
           .map(e => ({ e, tot: _olympicTotal(e) }))
-          .sort((a,b) => b.tot - a.tot || _bestMade(b.e.snatch) - _bestMade(a.e.snatch));
+          .sort(_rankCmp);
         let p = 0;
         grp.forEach(r => {
           if (r.tot > 0 && scores[r.e.schoolId] && p < pts.length) {
@@ -1124,7 +1132,7 @@ const HM = (() => {
       wcs.filter(wc => tElig.some(e => e.wc === wc)).forEach(wc => {
         const grp = tElig.filter(e => e.wc === wc)
           .map(e => ({ e, tot: _traditionalTotal(e) }))
-          .sort((a,b) => b.tot - a.tot || _bestMade(b.e.cj) - _bestMade(a.e.cj));
+          .sort(_rankCmp);
         let p = 0;
         grp.forEach(r => {
           if (r.tot > 0 && scores[r.e.schoolId] && p < pts.length) {
@@ -2086,142 +2094,235 @@ const HM = (() => {
   // ── Export CSV ─────────────────────────────────────────────────────────────
   function exportResultsCSV() {
     const m = _meet(); if (!m) return;
-    const wcs = _wcs(m.gender);
+    const wcs  = _wcs(m.gender);
+    const N    = m.schools.length;
+    const pts  = _teamPoints(N);
+
+    function isOlyElig(e) { return e.discipline==='both'||e.discipline==='olympic'; }
+    function isTrdElig(e) { return e.discipline==='both'||e.discipline==='traditional'; }
+    function wcPtsMap(wc, eligFn, totFn) {
+      const elig   = m.entries.filter(e => e.wc===wc && eligFn(e));
+      const sorted = [...elig].map(e=>({e,tot:totFn(e)})).sort(_rankCmp);
+      const map = {}; let p=0;
+      sorted.forEach(r=>{ if(r.tot>0&&p<pts.length) map[r.e.id]=pts[p++]; });
+      return map;
+    }
+    function attVal(a) {
+      if (!a || a.result===null) return '';
+      return a.result==='miss' ? 'X' : String(a.declared);
+    }
+
     const rows = [
-      ['Meet', m.name], ['Date', m.date], ['Location', m.location], ['Gender', m.gender], [],
-      ['Athlete','School','Weight Class','Discipline',
+      ['Meet', m.name||''], ['Date', m.date||''], ['Location', m.location||''], ['Gender', m.gender||''], [],
+      ['Weight Class','Athlete','Team','Weigh-in',
        'Snatch 1','Snatch 2','Snatch 3','Best Snatch',
        'C&J 1','C&J 2','C&J 3','Best C&J',
        'Bench 1','Bench 2','Bench 3','Best Bench',
-       'Olympic Total','Traditional Total'],
+       'Oly Total','Oly Pts','Trd Total','Trd Pts'],
     ];
-    const ordered = [];
-    wcs.forEach(wc => m.entries.filter(e => e.wc === wc).forEach(e => ordered.push(e)));
-    ordered.forEach(e => {
-      const school = m.schools.find(s => s.id === e.schoolId);
-      const att = lift => e[lift].map(a => a.result === 'good' ? '+'+a.declared : a.result === 'miss' ? '-'+a.declared : '');
-      rows.push([
-        e.name, school?.name||'', e.wc, e.discipline,
-        ...att('snatch'), _bestMade(e.snatch)||'',
-        ...att('cj'),     _bestMade(e.cj)||'',
-        ...att('bench'),  _bestMade(e.bench)||'',
-        _olympicTotal(e)||'', _traditionalTotal(e)||'',
-      ]);
+
+    const teamOly = {}, teamTrd = {};
+    m.schools.forEach(s => { teamOly[s.id]=0; teamTrd[s.id]=0; });
+
+    wcs.filter(wc => m.entries.some(e=>e.wc===wc)).forEach(wc => {
+      const entries = m.entries.filter(e=>e.wc===wc);
+      const oMap = wcPtsMap(wc, isOlyElig, _olympicTotal);
+      const tMap = wcPtsMap(wc, isTrdElig, _traditionalTotal);
+      entries.forEach(e => {
+        teamOly[e.schoolId] = (teamOly[e.schoolId]||0) + (oMap[e.id]||0);
+        teamTrd[e.schoolId] = (teamTrd[e.schoolId]||0) + (tMap[e.id]||0);
+      });
+      const sorted = [...entries].sort((a,b) => {
+        const sa = m.schools.findIndex(s=>s.id===a.schoolId);
+        const sb = m.schools.findIndex(s=>s.id===b.schoolId);
+        return sa-sb || a.name.localeCompare(b.name);
+      });
+      sorted.forEach(e => {
+        const sch    = m.schools.find(s=>s.id===e.schoolId);
+        const oTotal = _olympicTotal(e);
+        const tTotal = _traditionalTotal(e);
+        rows.push([
+          e.wc,
+          e.name + (e.discipline==='exhibition'?' (EX)':''),
+          sch?.name||'',
+          e.weighIn||'',
+          attVal(e.snatch[0]), attVal(e.snatch[1]), attVal(e.snatch[2]), _bestMade(e.snatch)||'',
+          attVal(e.cj[0]),    attVal(e.cj[1]),    attVal(e.cj[2]),    _bestMade(e.cj)||'',
+          attVal(e.bench[0]), attVal(e.bench[1]), attVal(e.bench[2]), _bestMade(e.bench)||'',
+          oTotal||'', oMap[e.id]||'', tTotal||'', tMap[e.id]||'',
+        ]);
+      });
+      rows.push([]);
     });
-    const csv  = rows.map(r => r.map(c => { const s = String(c??''); return /[,"\n]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s; }).join(',')).join('\n');
+
+    rows.push(['Team Scores']);
+    rows.push(['School','Olympic Pts','Traditional Pts','Total']);
+    m.schools.map(s=>({name:s.name,oly:teamOly[s.id]||0,trd:teamTrd[s.id]||0}))
+      .sort((a,b)=>(b.oly+b.trd)-(a.oly+a.trd))
+      .forEach(s => rows.push([s.name, s.oly, s.trd, s.oly+s.trd]));
+
+    const csv  = rows.map(r => r.map(c => { const s=String(c??''); return /[,"\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s; }).join(',')).join('\n');
     const blob = new Blob([csv], { type:'text/csv;charset=utf-8;' });
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement('a');
-    a.href = url; a.download = (m.name||'meet').replace(/[^a-z0-9]/gi,'_')+'_results.csv'; a.click();
+    a.href=url; a.download=(m.name||'meet').replace(/[^a-z0-9]/gi,'_')+'_results.csv'; a.click();
     URL.revokeObjectURL(url);
   }
 
   function exportResultsPDF() {
     const m = _meet(); if (!m) return;
-    const wcs  = _wcs(m.gender);
-    const N    = m.schools.length;
-    const pts  = _teamPoints(N);
-    const discMap = { both:'Both', traditional:'Traditional', olympic:'Olympic', exhibition:'Exhibition' };
-
-    // ── Compute team scores ────────────────────────────────────────────────
-    const scores = {};
-    m.schools.forEach(s => { scores[s.id] = { name: s.name, olympic: 0, traditional: 0 }; });
-    const oElig = m.entries.filter(e => e.discipline==='both'||e.discipline==='olympic');
-    wcs.filter(wc => oElig.some(e => e.wc===wc)).forEach(wc => {
-      const grp = oElig.filter(e => e.wc===wc).map(e => ({ e, tot: _olympicTotal(e) })).sort((a,b) => b.tot-a.tot||_bestMade(b.e.snatch)-_bestMade(a.e.snatch));
-      let p=0; grp.forEach(r => { if (r.tot>0&&scores[r.e.schoolId]&&p<pts.length) scores[r.e.schoolId].olympic += pts[p++]; });
-    });
-    const tElig = m.entries.filter(e => e.discipline==='both'||e.discipline==='traditional');
-    wcs.filter(wc => tElig.some(e => e.wc===wc)).forEach(wc => {
-      const grp = tElig.filter(e => e.wc===wc).map(e => ({ e, tot: _traditionalTotal(e) })).sort((a,b) => b.tot-a.tot||_bestMade(b.e.cj)-_bestMade(a.e.cj));
-      let p=0; grp.forEach(r => { if (r.tot>0&&scores[r.e.schoolId]&&p<pts.length) scores[r.e.schoolId].traditional += pts[p++]; });
-    });
-    const teamData = Object.values(scores).map(s => ({ ...s, total: s.olympic+s.traditional })).sort((a,b) => b.total-a.total);
+    const wcs = _wcs(m.gender);
+    const N   = m.schools.length;
+    const pts = _teamPoints(N);
 
     // ── Helpers ────────────────────────────────────────────────────────────
-    function medal(p) { return p===1?'🥇':p===2?'🥈':p===3?'🥉':p; }
-    function attCell(a) {
-      if (!a || a.result===null) return '<td></td>';
-      const good = a.result==='good';
-      return `<td style="text-align:center;color:${good?'#1a7a1a':'#c00'};font-weight:${good?700:400};${!good?'text-decoration:line-through':''};">${good?'+':''}${a.declared}</td>`;
+    function isOlyElig(e) { return e.discipline==='both'||e.discipline==='olympic'; }
+    function isTrdElig(e) { return e.discipline==='both'||e.discipline==='traditional'; }
+
+    function wcPtsMap(wc, eligFn, totFn) {
+      const elig   = m.entries.filter(e => e.wc===wc && eligFn(e));
+      const sorted = [...elig].map(e=>({e,tot:totFn(e)})).sort(_rankCmp);
+      const map={}; let p=0;
+      sorted.forEach(r=>{ if(r.tot>0&&p<pts.length) map[r.e.id]=pts[p++]; });
+      return map;
     }
 
-    // ── Team score tables ──────────────────────────────────────────────────
-    function teamTableHTML(title, sorted, key) {
-      const rows = sorted.map((s,i) => `<tr><td style="font-size:14pt;">${medal(i+1)}</td><td>${esc(s.name)}</td><td style="text-align:right;font-weight:700;">${s[key]}</td></tr>`).join('');
-      return `<h3>${title}</h3><table><thead><tr><th style="text-align:center;">Place</th><th>School</th><th style="text-align:right;">Pts</th></tr></thead><tbody>${rows}</tbody></table>`;
+    function hexToRgba(hex, alpha) {
+      if (!hex||hex.length<7) return `rgba(180,180,180,${alpha})`;
+      const r=parseInt(hex.slice(1,3),16), g=parseInt(hex.slice(3,5),16), b=parseInt(hex.slice(5,7),16);
+      return `rgba(${r},${g},${b},${alpha})`;
     }
-    const oTeam = [...teamData].sort((a,b)=>b.olympic-a.olympic);
-    const tTeam = [...teamData].sort((a,b)=>b.traditional-a.traditional);
-    const combinedRows = teamData.map((s,i) => `<tr><td style="font-size:14pt;">${medal(i+1)}</td><td>${esc(s.name)}</td><td style="text-align:right;">${s.olympic} + ${s.traditional}</td><td style="text-align:right;font-weight:700;font-size:12pt;">${s.total}</td></tr>`).join('');
-    const teamHTML = teamTableHTML('Olympic Team Scores', oTeam, 'olympic')
-      + teamTableHTML('Traditional Team Scores', tTeam, 'traditional')
-      + `<h3>Combined Total</h3><table><thead><tr><th style="text-align:center;">Place</th><th>School</th><th style="text-align:right;">Oly + Trad</th><th style="text-align:right;">Total</th></tr></thead><tbody>${combinedRows}</tbody></table>`;
 
-    // ── Individual results ─────────────────────────────────────────────────
-    function indivSectionHTML(label, elig, totFn, tieKey) {
-      if (!elig.length) return '';
-      const wcSecs = wcs.filter(wc => elig.some(e => e.wc===wc)).map(wc => {
-        const grp = elig.filter(e => e.wc===wc)
-          .map(e => ({ e, tot: totFn(e), tiebreak: _bestMade(e[tieKey]) }))
-          .sort((a,b) => b.tot-a.tot||b.tiebreak-a.tiebreak);
-        let pIdx = -1;
-        const rows = grp.map(r => {
-          if (r.tot>0) pIdx++;
-          const placeNum  = r.tot>0 ? pIdx+1 : null;
-          const earnedPts = placeNum && pIdx<pts.length ? pts[pIdx] : null;
-          const sch = m.schools.find(s => s.id===r.e.schoolId);
-          const isSnatch = label==='OLYMPIC';
-          const lift1 = isSnatch ? r.e.snatch : r.e.cj;
-          const lift2 = isSnatch ? r.e.cj     : r.e.bench;
-          const best1 = _bestMade(lift1), best2 = _bestMade(lift2);
-          return `<tr>
-            <td style="text-align:center;font-size:${placeNum&&placeNum<=3?'13pt':'10pt'};">${placeNum?(medal(placeNum)):'—'}</td>
-            <td>${esc(r.e.name)}</td>
-            <td style="color:#555;">${esc(sch?.name||'')}</td>
-            ${attCell(lift1[0])}${attCell(lift1[1])}${attCell(lift1[2])}
-            <td style="text-align:right;font-weight:700;">${best1||'—'}</td>
-            ${attCell(lift2[0])}${attCell(lift2[1])}${attCell(lift2[2])}
-            <td style="text-align:right;font-weight:700;">${best2||'—'}</td>
-            <td style="text-align:right;font-weight:700;color:#8B6914;">${r.tot||'—'}</td>
-            <td style="text-align:right;color:#1a7a1a;font-weight:600;">${earnedPts!=null?'+'+earnedPts:'—'}</td>
-          </tr>`;
-        }).join('');
-        const h1 = isSnatch ? 'Snatch' : 'C&amp;J';
-        const h2 = isSnatch ? 'C&amp;J' : 'Bench';
-        return `<h3>${wc} lbs</h3>
-          <table><thead><tr>
-            <th style="text-align:center;">Place</th><th>Athlete</th><th>School</th>
-            <th colspan="3" style="text-align:center;">${h1}</th><th style="text-align:right;">Best</th>
-            <th colspan="3" style="text-align:center;">${h2}</th><th style="text-align:right;">Best</th>
-            <th style="text-align:right;">Total</th><th style="text-align:right;">Pts</th>
-          </tr></thead><tbody>${rows}</tbody></table>`;
+    function bestIdx(atts) {
+      let b=-1, bw=-1;
+      atts.forEach((a,i)=>{ if(a.result==='good'&&a.declared>bw){b=i;bw=a.declared;} });
+      return b;
+    }
+
+    function attCells(atts) {
+      const bi = bestIdx(atts);
+      const cells = atts.map((a,i) => {
+        if (a.result===null) return '<td class="ac"></td>';
+        if (a.result==='miss') return `<td class="ac miss">X</td>`;
+        return i===bi ? `<td class="ac best">${a.declared}</td>` : `<td class="ac">${a.declared}</td>`;
       }).join('');
-      return `<h2>${label}</h2>${wcSecs}`;
+      const best = _bestMade(atts);
+      return cells + (best ? `<td class="ac best">${best}</td>` : `<td class="ac muted">—</td>`);
     }
 
-    const indivHTML = indivSectionHTML('OLYMPIC', oElig, _olympicTotal, 'snatch')
-      + indivSectionHTML('TRADITIONAL', tElig, _traditionalTotal, 'cj');
+    // ── Compute totals and accumulate team scores ──────────────────────────
+    const teamOly = {}, teamTrd = {};
+    m.schools.forEach(s=>{ teamOly[s.id]=0; teamTrd[s.id]=0; });
 
-    // ── Assemble HTML ──────────────────────────────────────────────────────
+    const wcData = wcs.filter(wc=>m.entries.some(e=>e.wc===wc)).map(wc => {
+      const entries = m.entries.filter(e=>e.wc===wc);
+      const oMap = wcPtsMap(wc, isOlyElig, _olympicTotal);
+      const tMap = wcPtsMap(wc, isTrdElig, _traditionalTotal);
+      entries.forEach(e=>{
+        teamOly[e.schoolId]=(teamOly[e.schoolId]||0)+(oMap[e.id]||0);
+        teamTrd[e.schoolId]=(teamTrd[e.schoolId]||0)+(tMap[e.id]||0);
+      });
+      return { wc, entries, oMap, tMap };
+    });
+
+    // ── Weight class sections ──────────────────────────────────────────────
+    const wcSections = wcData.map(({wc, entries, oMap, tMap}) => {
+      const sorted = [...entries].sort((a,b)=>{
+        const sa=m.schools.findIndex(s=>s.id===a.schoolId);
+        const sb=m.schools.findIndex(s=>s.id===b.schoolId);
+        return sa-sb||a.name.localeCompare(b.name);
+      });
+
+      const rows = sorted.map(e => {
+        const sch    = m.schools.find(s=>s.id===e.schoolId);
+        const bg     = hexToRgba(sch?.color||'#888', 0.13);
+        const oTotal = _olympicTotal(e);
+        const tTotal = _traditionalTotal(e);
+        const oPts   = oMap[e.id]||'';
+        const tPts   = tMap[e.id]||'';
+        const isEx   = e.discipline==='exhibition';
+        return `<tr style="background:${bg};">
+          <td>${esc(e.name)}${isEx?' <span class="ex">(EX)</span>':''}</td>
+          <td class="ac">${esc(sch?.name||'')}</td>
+          <td class="ac">${e.weighIn||e.wc}</td>
+          ${attCells(e.snatch)}
+          ${attCells(e.cj)}
+          ${attCells(e.bench)}
+          <td class="ac tot">${oTotal||'—'}</td><td class="ac pts">${oPts||'—'}</td>
+          <td class="ac tot">${tTotal||'—'}</td><td class="ac pts">${tPts||'—'}</td>
+        </tr>`;
+      }).join('');
+
+      return `<div class="wc-block">
+        <div class="wc-title">${wc} Weight Class</div>
+        <table>
+          <thead>
+            <tr class="hdr1">
+              <th rowspan="2">Athlete</th><th rowspan="2" class="ac">Team</th><th rowspan="2" class="ac">Weight</th>
+              <th colspan="4" class="ac">Snatch</th>
+              <th colspan="4" class="ac">Clean &amp; Jerk</th>
+              <th colspan="4" class="ac">Bench</th>
+              <th colspan="2" class="ac">Oly Total/Points</th>
+              <th colspan="2" class="ac">Trd Total/Points</th>
+            </tr>
+            <tr class="hdr2">
+              <th class="ac">1st</th><th class="ac">2nd</th><th class="ac">3rd</th><th class="ac">Best</th>
+              <th class="ac">1st</th><th class="ac">2nd</th><th class="ac">3rd</th><th class="ac">Best</th>
+              <th class="ac">1st</th><th class="ac">2nd</th><th class="ac">3rd</th><th class="ac">Best</th>
+              <th class="ac">Total</th><th class="ac">Pts</th>
+              <th class="ac">Total</th><th class="ac">Pts</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`;
+    }).join('');
+
+    // ── Team score summary ─────────────────────────────────────────────────
+    const teamRows = m.schools
+      .map(s=>({name:s.name, oly:teamOly[s.id]||0, trd:teamTrd[s.id]||0}))
+      .sort((a,b)=>(b.oly+b.trd)-(a.oly+a.trd))
+      .map(s=>`<tr><td>${esc(s.name)}</td><td class="ac pts">${s.oly}</td><td class="ac pts">${s.trd}</td><td class="ac tot">${s.oly+s.trd}</td></tr>`)
+      .join('');
+
+    const teamSummary = `<div class="wc-block">
+      <div class="wc-title">Team Scores</div>
+      <table style="width:auto;">
+        <thead><tr class="hdr1"><th>School</th><th class="ac">Olympic</th><th class="ac">Traditional</th><th class="ac">Total</th></tr></thead>
+        <tbody>${teamRows}</tbody>
+      </table>
+    </div>`;
+
+    // ── CSS ────────────────────────────────────────────────────────────────
     const css = `
       *{box-sizing:border-box;margin:0;padding:0}
-      body{font-family:Arial,sans-serif;font-size:10pt;color:#000;padding:24px;}
-      h1{font-size:22pt;margin-bottom:4px;}
-      .meta{font-size:10pt;color:#555;margin-bottom:20px;}
-      h2{font-size:14pt;border-bottom:2px solid #C9A84C;padding-bottom:4px;margin:24px 0 12px;color:#333;}
-      h3{font-size:11pt;background:#f0f0f0;padding:4px 8px;margin:14px 0 6px;border-radius:2px;}
-      table{width:100%;border-collapse:collapse;margin-bottom:10px;font-size:9pt;}
-      th{background:#e8e8e8;padding:4px 6px;text-align:left;font-size:8pt;font-weight:700;letter-spacing:.3px;border:1px solid #ccc;}
-      td{padding:4px 6px;border-bottom:1px solid #eee;}
-      @media print{body{padding:12px}h2{page-break-before:auto}}`;
+      body{font-family:Arial,sans-serif;font-size:9pt;color:#000;padding:16px;}
+      h1{font-size:18pt;font-weight:700;text-align:center;margin-bottom:3px;}
+      .meta{font-size:9pt;color:#555;text-align:center;margin-bottom:18px;}
+      .wc-block{margin-bottom:22px;}
+      .wc-title{font-size:11pt;font-weight:700;text-align:center;background:#e0e0e0;border:1px solid #bbb;padding:4px 8px;margin-bottom:0;}
+      table{width:100%;border-collapse:collapse;font-size:8pt;}
+      th{background:#ebebeb;padding:3px 4px;font-weight:700;border:1px solid #bbb;white-space:nowrap;}
+      td{padding:3px 4px;border:1px solid #ddd;white-space:nowrap;}
+      .ac{text-align:center;}
+      .miss{color:#c00;font-weight:700;}
+      .best{color:#1a7a1a;font-weight:700;}
+      .muted{color:#aaa;}
+      .tot{font-weight:700;}
+      .pts{color:#1a7a1a;font-weight:700;}
+      .ex{font-size:7pt;color:#888;}
+      .hdr1 th{background:#d8d8d8;}
+      .hdr2 th{background:#ebebeb;font-size:7pt;}
+      @media print{.wc-block{page-break-inside:avoid}body{padding:8px}}`;
 
-    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${esc(m.name||'Meet')} — Results</title><style>${css}</style></head>
+    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
+      <title>${esc(m.name||'Meet')} — Results</title>
+      <style>${css}</style></head>
       <body>
         <h1>${esc(m.name||'Meet Results')}</h1>
-        <div class="meta">${esc(m.gender||'')} &nbsp;|&nbsp; ${esc(m.date||'—')} &nbsp;|&nbsp; ${esc(m.location||'')}</div>
-        <h2>Team Scores</h2>${teamHTML}
-        ${indivHTML}
+        <div class="meta">${[m.gender,m.date,m.location].filter(Boolean).map(v=>esc(v)).join(' &nbsp;|&nbsp; ')}</div>
+        ${wcSections}
+        ${teamSummary}
       </body></html>`;
 
     if (window.liftbuilderApp?.exportPDF) {
@@ -2229,7 +2330,7 @@ const HM = (() => {
         .then(r => showToast(r?.success ? 'PDF saved.' : r?.error ? 'PDF failed: ' + r.error : 'PDF export cancelled.'))
         .catch(e => showToast('PDF export failed: ' + (e?.message || e || 'unknown error')));
     } else {
-      const win = window.open('', '_blank', 'width=1000,height=750');
+      const win = window.open('', '_blank', 'width=1200,height=800');
       if (!win) { showToast('Allow pop-ups to export PDF.'); return; }
       win.document.write(html); win.document.close(); win.focus();
       setTimeout(() => win.print(), 500);
@@ -2430,12 +2531,12 @@ const HM = (() => {
     const pPts = _teamPoints(numTeams);
     const oElig = m.entries.filter(e => e.discipline === 'both' || e.discipline === 'olympic');
     wcs.filter(wc => oElig.some(e => e.wc === wc)).forEach(wc => {
-      const grp = oElig.filter(e => e.wc === wc).map(e => ({ e, tot: _olympicTotal(e) })).sort((a,b) => b.tot - a.tot);
+      const grp = oElig.filter(e => e.wc === wc).map(e => ({ e, tot: _olympicTotal(e) })).sort(_rankCmp);
       let p = 0; grp.forEach(r => { if (r.tot > 0 && scores[r.e.schoolId] && p < pPts.length) { scores[r.e.schoolId].olympic += pPts[p++]; } });
     });
     const tElig = m.entries.filter(e => e.discipline === 'both' || e.discipline === 'traditional');
     wcs.filter(wc => tElig.some(e => e.wc === wc)).forEach(wc => {
-      const grp = tElig.filter(e => e.wc === wc).map(e => ({ e, tot: _traditionalTotal(e) })).sort((a,b) => b.tot - a.tot);
+      const grp = tElig.filter(e => e.wc === wc).map(e => ({ e, tot: _traditionalTotal(e) })).sort(_rankCmp);
       let p = 0; grp.forEach(r => { if (r.tot > 0 && scores[r.e.schoolId] && p < pPts.length) { scores[r.e.schoolId].traditional += pPts[p++]; } });
     });
     const teamRows = Object.values(scores).map(s => ({ ...s, total: s.olympic + s.traditional })).sort((a,b) => b.total - a.total)
@@ -2470,6 +2571,117 @@ const HM = (() => {
     </body></html>`);
     win.document.close();
     win.focus();
+  }
+
+  function exportCompSheetPDF() {
+    const m = _meet(); if (!m) return;
+    const wcs = _wcs(m.gender);
+
+    function hexToRgba(hex, alpha) {
+      if (!hex || hex.length < 7) return `rgba(200,200,200,${alpha})`;
+      const r=parseInt(hex.slice(1,3),16), g=parseInt(hex.slice(3,5),16), b=parseInt(hex.slice(5,7),16);
+      return `rgba(${r},${g},${b},${alpha})`;
+    }
+
+    const wcSections = wcs.filter(wc => m.entries.some(e => e.wc === wc)).map(wc => {
+      const entries = m.entries.filter(e => e.wc === wc);
+      const sorted  = [...entries].sort((a,b) => {
+        const sa = m.schools.findIndex(s => s.id === a.schoolId);
+        const sb = m.schools.findIndex(s => s.id === b.schoolId);
+        return sa - sb || a.name.localeCompare(b.name);
+      });
+
+      const rows = sorted.map(e => {
+        const sch  = m.schools.find(s => s.id === e.schoolId);
+        const bg   = hexToRgba(sch?.color || '#888', 0.12);
+        const isEx = e.discipline === 'exhibition';
+        const sn1  = e.snatch[0]?.declared || '';
+        const cj1  = e.cj[0]?.declared    || '';
+        const bn1  = e.bench[0]?.declared  || '';
+        const w    = (td, val) => val ? `<td class="ac pre">${val}</td>` : `<td class="ac w"></td>`;
+        return `<tr style="background:${bg};">
+          <td>${esc(e.name)}${isEx?' <span class="ex">(EX)</span>':''}</td>
+          <td class="ac">${esc(sch?.name||'')}</td>
+          <td class="ac">${e.weighIn||''}</td>
+          ${w(null,sn1)}<td class="ac w"></td><td class="ac w"></td><td class="ac w"></td>
+          ${w(null,cj1)}<td class="ac w"></td><td class="ac w"></td><td class="ac w"></td>
+          ${w(null,bn1)}<td class="ac w"></td><td class="ac w"></td><td class="ac w"></td>
+          <td class="ac w"></td><td class="ac w"></td>
+          <td class="ac w"></td><td class="ac w"></td>
+        </tr>`;
+      }).join('');
+
+      return `<div class="wc-block">
+        <div class="wc-title">${wc} Weight Class</div>
+        <table>
+          <thead>
+            <tr class="hdr1">
+              <th rowspan="2">Athlete</th><th rowspan="2" class="ac">Team</th><th rowspan="2" class="ac">Weight</th>
+              <th colspan="4" class="ac">Snatch</th>
+              <th colspan="4" class="ac">Clean &amp; Jerk</th>
+              <th colspan="4" class="ac">Bench</th>
+              <th colspan="2" class="ac">Oly Total/Points</th>
+              <th colspan="2" class="ac">Trd Total/Points</th>
+            </tr>
+            <tr class="hdr2">
+              <th class="ac">1st</th><th class="ac">2nd</th><th class="ac">3rd</th><th class="ac">Best</th>
+              <th class="ac">1st</th><th class="ac">2nd</th><th class="ac">3rd</th><th class="ac">Best</th>
+              <th class="ac">1st</th><th class="ac">2nd</th><th class="ac">3rd</th><th class="ac">Best</th>
+              <th class="ac">Total</th><th class="ac">Pts</th>
+              <th class="ac">Total</th><th class="ac">Pts</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`;
+    }).join('');
+
+    const schoolKey = m.schools.map(s =>
+      `<span style="display:inline-flex;align-items:center;gap:5px;margin-right:14px;">
+        <span style="display:inline-block;width:12px;height:12px;background:${hexToRgba(s.color||'#888',0.4)};border:1px solid ${s.color||'#888'};border-radius:2px;"></span>
+        ${esc(s.name)}
+      </span>`).join('');
+
+    const css = `
+      @page{size:Letter landscape;margin:.45in}
+      *{box-sizing:border-box;margin:0;padding:0}
+      body{font-family:Arial,sans-serif;font-size:9pt;color:#000;padding:10px}
+      h1{font-size:15pt;font-weight:700;text-align:center;margin-bottom:2px}
+      .meta{font-size:8.5pt;color:#555;text-align:center;margin-bottom:6px}
+      .key{font-size:8pt;text-align:center;margin-bottom:12px}
+      .wc-block{margin-bottom:16px}
+      .wc-title{font-size:10.5pt;font-weight:700;text-align:center;background:#e0e0e0;border:1px solid #bbb;padding:3px 8px}
+      table{width:100%;border-collapse:collapse;font-size:8pt}
+      th{background:#ebebeb;padding:2px 3px;font-weight:700;border:1px solid #bbb;white-space:nowrap}
+      td{padding:0 3px;border:1px solid #bbb;height:20px;white-space:nowrap}
+      .ac{text-align:center}
+      .pre{font-weight:700;text-align:center;color:#1a4a8a}
+      .w{background:#fafafa}
+      .ex{font-size:7pt;color:#888}
+      .hdr1 th{background:#d0d0d0}
+      .hdr2 th{background:#ebebeb;font-size:7pt}
+      @media print{.wc-block{page-break-inside:avoid}}`;
+
+    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
+      <title>${esc(m.name||'Meet')} — Competition Sheets</title>
+      <style>${css}</style></head>
+      <body>
+        <h1>${esc(m.name||'Meet')} — Competition Sheets</h1>
+        <div class="meta">${[m.gender,m.date,m.location].filter(Boolean).map(v=>esc(v)).join(' &nbsp;|&nbsp; ')}</div>
+        <div class="key">${schoolKey}</div>
+        ${wcSections}
+      </body></html>`;
+
+    if (window.liftbuilderApp?.exportPDF) {
+      window.liftbuilderApp.exportPDF(html)
+        .then(r => showToast(r?.success ? 'Comp sheets saved.' : r?.error ? 'PDF failed: '+r.error : 'Cancelled.'))
+        .catch(e => showToast('PDF failed: '+(e?.message||e||'unknown')));
+    } else {
+      const win = window.open('', '_blank', 'width=1200,height=800');
+      if (!win) { showToast('Allow pop-ups to print.'); return; }
+      win.document.write(html); win.document.close(); win.focus();
+      setTimeout(() => win.print(), 500);
+    }
   }
 
   // ── Display window ──────────────────────────────────────────────────────────
@@ -2601,6 +2813,7 @@ const HM = (() => {
       const allDone      = totalWeighed === m.entries.length && m.entries.length > 0;
       return back('← Setup', 'HM.backToSetup()') + sep + title(esc(m.name)) +
         sep + `<span id="hm-wi-counter" style="font-size:12px;color:var(--muted);">${totalWeighed} / ${m.entries.length} weighed in</span>` + spacer +
+        `<button onclick="HM.exportCompSheetPDF()" class="btn btn-outline" style="font-size:12px;padding:5px 10px;">🖨 Comp Sheets</button>` +
         `<button id="hm-wi-proceed-btn" onclick="HM.proceedToCompetition()" class="btn btn-gold" style="font-size:12px;padding:5px 14px;" ${allDone?'':'disabled'}>Begin Competition →</button>`;
     }
 
@@ -2677,7 +2890,7 @@ const HM = (() => {
     // Scoreboard
     _setScoreTab, _toggleCompFont,
     // Results
-    syncPRsToRoster, exportResultsCSV, exportResultsPDF,
+    syncPRsToRoster, exportResultsCSV, exportResultsPDF, exportCompSheetPDF,
     openEditResultModal, saveEditResult, _setAttemptResult,
     // Phase 3
     toggleFlights, setEntryFlight, _setFlight,
