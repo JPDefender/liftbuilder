@@ -82,16 +82,26 @@ td{border-bottom:1px solid var(--dark3);}
 #waiting-msg{display:none;background:var(--dark2);border:1px solid var(--dark3);border-radius:8px;padding:24px;text-align:center;color:var(--muted);font-size:15px;}
 
 /* ── Scoreboard ── */
-.sb-label{font-size:10px;font-weight:700;letter-spacing:1.5px;color:var(--muted);margin-bottom:10px;}
-.wc-hd{font-size:12px;font-weight:700;color:var(--muted);letter-spacing:.5px;background:#1c1c1c;padding:3px 8px;border-radius:3px;margin-bottom:5px;}
-.sr{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:4px;margin-bottom:3px;}
-.sr.first{background:var(--gold-a15);}
-.sr-pl{font-size:17px;font-weight:700;width:22px;flex-shrink:0;color:var(--muted);}
-.sr-pl.gold{color:var(--gold);}
-.sr-name{flex:1;font-size:14px;font-weight:600;}
-.sr-sch{font-size:11px;color:var(--muted);}
-.sr-tot{font-size:20px;font-weight:700;color:var(--gold);}
-.sr-tot.bomb{color:var(--red);font-size:14px;}
+.sb-label{font-size:10px;font-weight:700;letter-spacing:1.5px;color:var(--muted);margin-bottom:8px;}
+.wc-hd{font-size:11px;font-weight:600;letter-spacing:.5px;background:#1c1c1c;padding:4px 8px;border-radius:3px;margin-bottom:4px;}
+.score-row{display:flex;align-items:center;gap:5px;padding:4px 6px;border-radius:5px;margin-bottom:2px;}
+.score-row.first{background:var(--gold-a15);}
+.score-place{font-size:13px;font-weight:700;width:18px;flex-shrink:0;color:var(--muted);}
+.score-place.gold{color:var(--gold);}
+.score-name{font-size:11px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.score-school{font-size:9px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.att-lbl{font-size:8px;font-weight:700;letter-spacing:.5px;color:#555;width:13px;flex-shrink:0;}
+.att{font-family:'Barlow Condensed',Arial,sans-serif;font-size:10px;font-weight:700;min-width:24px;text-align:center;padding:1px 2px;border-radius:3px;}
+.att-good{background:rgba(94,192,138,.2);color:var(--green);border:1px solid rgba(94,192,138,.4);}
+.att-miss{background:rgba(224,112,112,.15);color:var(--red);border:1px solid rgba(224,112,112,.35);text-decoration:line-through;}
+.att-pending{background:rgba(255,255,255,.06);color:#666;border:1px solid #333;}
+.att-empty{color:#2a2a2a;border:1px solid #222;background:transparent;}
+.score-totals{flex-shrink:0;display:flex;flex-direction:column;align-items:flex-end;gap:2px;}
+.tot-line{display:flex;align-items:baseline;gap:3px;}
+.tot-lbl{font-size:8px;font-weight:700;letter-spacing:.5px;color:#555;}
+.tot-val{font-family:'Barlow Condensed',Arial,sans-serif;font-size:14px;font-weight:700;color:var(--gold);line-height:1;}
+.tot-val.zero{color:#555;font-size:12px;}
+.tot-pts{font-size:9px;font-weight:700;color:#888;}
 
 /* ── Modal ── */
 #modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:200;align-items:center;justify-content:center;}
@@ -681,57 +691,107 @@ function render(){
   } else { doneCard.style.display='none'; }
 
   // Scoreboard
-  const wcs   = m.gender==='Girls'?GIRLS_WC:BOYS_WC;
-  const pWcs  = [...new Set(pEntries.map(e=>e.wc))];
-  const oElig = m.entries.filter(e=>e.discipline==='both'||e.discipline==='olympic');
-  const tElig = m.entries.filter(e=>e.discipline==='both'||e.discipline==='traditional');
+  const wcs    = m.gender==='Girls'?GIRLS_WC:BOYS_WC;
+  const isOlyE = e => e.discipline==='both'||e.discipline==='olympic';
+  const isTrdE = e => e.discipline==='both'||e.discipline==='traditional';
+  const isExE  = e => e.discipline==='exhibition';
+  const oElig  = m.entries.filter(isOlyE);
+  const tElig  = m.entries.filter(isTrdE);
+  const N      = (m.schools||[]).length;
+  const pts    = _teamPoints(N);
 
-  function sbSection(label,elig,totFn){
-    const wcGroup = wcs.filter(wc=>pWcs.includes(wc)&&elig.some(e=>e.wc===wc));
-    if(!wcGroup.length) return '';
-    let html=`<div class="sb-label" style="margin:10px 0 6px;">${label}</div>`;
-    html+=wcGroup.map(wc=>{
-      const grp=elig.filter(e=>e.wc===wc).map(e=>({e,tot:totFn(e)})).sort(_rankCmp);
-      let p=0;
-      return `<div style="margin-bottom:14px;"><div class="wc-hd">${wc} LBS</div>`+
-        grp.map(r=>{
-          if(r.tot>0) p++;
-          const medal=p===1?'🥇':p===2?'🥈':p===3?'🥉':null;
-          const pl=r.tot>0?(medal||p):'—';
-          const sch=m.schools.find(s=>s.id===r.e.schoolId);
-          return `<div class="sr${r.tot>0&&p===1?' first':''}">
-            <div class="sr-pl${r.tot>0&&p<=3?' gold':''}" style="font-size:${medal?'18px':'16px'}">${pl}</div>
-            <div><div class="sr-name">${esc(r.e.name)}</div><div class="sr-sch">${esc(sch?.name||'')}</div></div>
-            <div class="sr-tot${!r.tot?' bomb':''}">${r.tot||'0'}</div>
-          </div>`;
-        }).join('')+'</div>';
-    }).join('');
-    return html;
+  const oPts = {}, tPts = {};
+  wcs.filter(wc=>oElig.some(e=>e.wc===wc)).forEach(wc=>{
+    const g=oElig.filter(e=>e.wc===wc).map(e=>({e,tot:_olympicTotal(e)})).sort((a,b)=>b.tot-a.tot);
+    let p=0; g.forEach(r=>{ if(r.tot>0&&p<pts.length) oPts[r.e.id]={pts:pts[p],place:++p}; });
+  });
+  wcs.filter(wc=>tElig.some(e=>e.wc===wc)).forEach(wc=>{
+    const g=tElig.filter(e=>e.wc===wc).map(e=>({e,tot:_traditionalTotal(e)})).sort((a,b)=>b.tot-a.tot);
+    let p=0; g.forEach(r=>{ if(r.tot>0&&p<pts.length) tPts[r.e.id]={pts:pts[p],place:++p}; });
+  });
+
+  function attCell(att){
+    if(!att||!att.declared) return `<span class="att att-empty">—</span>`;
+    if(att.result==='good') return `<span class="att att-good">${att.declared}</span>`;
+    if(att.result==='miss') return `<span class="att att-miss">${att.declared}</span>`;
+    return `<span class="att att-pending">${att.declared}</span>`;
   }
 
-  document.getElementById('scoreboard').innerHTML =
-    sbSection('OLYMPIC',oElig,_olympicTotal)+sbSection('TRADITIONAL',tElig,_traditionalTotal);
+  const usedWcs = wcs.filter(wc=>m.entries.some(e=>e.wc===wc));
+  document.getElementById('scoreboard').innerHTML = usedWcs.map(wc=>{
+    const grp=m.entries.filter(e=>e.wc===wc).map(e=>({
+      e,
+      oTot: isOlyE(e)||isExE(e) ? _olympicTotal(e) : 0,
+      tTot: isTrdE(e)||isExE(e) ? _traditionalTotal(e) : 0,
+    })).sort((a,b)=>{
+      const aM=Math.max(a.oTot,a.tTot), bM=Math.max(b.oTot,b.tTot);
+      if(bM!==aM) return bM-aM;
+      return (parseFloat(a.e.weighIn)||parseFloat(a.e.wc)||999)-(parseFloat(b.e.weighIn)||parseFloat(b.e.wc)||999);
+    });
+    if(!grp.length) return '';
+    let placed=0;
+    const rows=grp.map(({e,oTot,tTot})=>{
+      const sch=m.schools.find(s=>s.id===e.schoolId);
+      const ex=isExE(e);
+      const maxTot=Math.max(oTot,tTot);
+      if(!ex&&maxTot>0) placed++;
+      const medal=placed===1?'🥇':placed===2?'🥈':placed===3?'🥉':null;
+      const placeSt=!ex&&maxTot>0?(medal||String(placed)):'—';
+      const isFirst=placed===1&&!ex&&maxTot>0;
+      const oInfo=oPts[e.id], tInfo=tPts[e.id];
+      const oStr=(isOlyE(e)||ex)?(oTot||'—'):'—';
+      const tStr=(isTrdE(e)||ex)?(tTot||'—'):'—';
+      return `<div class="score-row${isFirst?' first':''}">
+        <div class="score-place${!ex&&placed<=3?' gold':''}">${placeSt}</div>
+        <div style="width:78px;flex-shrink:0;min-width:0;">
+          <div class="score-name">${esc(e.name)}${ex?' <span style="font-size:8px;color:#555;background:#1e1e1e;padding:1px 3px;border-radius:2px;">EX</span>':''}</div>
+          <div class="score-school">${esc(sch?.name||'')}</div>
+        </div>
+        <div style="flex:1;display:flex;align-items:center;gap:2px;min-width:0;overflow:hidden;">
+          <span class="att-lbl">SN</span>${(e.snatch||[]).map(attCell).join('')}
+          <span class="att-lbl" style="margin-left:2px;">CJ</span>${(e.cj||[]).map(attCell).join('')}
+          <span class="att-lbl" style="margin-left:2px;">BN</span>${(e.bench||[]).map(attCell).join('')}
+        </div>
+        <div class="score-totals">
+          <div class="tot-line">
+            <span class="tot-lbl">OLY</span>
+            <span class="tot-val${!oTot?' zero':''}">${oStr}</span>
+            ${oInfo&&!ex?`<span class="tot-pts">${oInfo.pts}pt</span>`:''}
+          </div>
+          <div class="tot-line">
+            <span class="tot-lbl">TRD</span>
+            <span class="tot-val${!tTot?' zero':''}">${tStr}</span>
+            ${tInfo&&!ex?`<span class="tot-pts">${tInfo.pts}pt</span>`:''}
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+    return `<div style="margin-bottom:.75rem;"><div class="wc-hd">${wc} LBS</div>${rows}</div>`;
+  }).join('') || '<div style="color:#444;font-size:13px;">No entries yet</div>';
 
   // Team scores
-  const N  = (m.schools||[]).length;
-  const pts = _teamPoints(N);
-  const sc  = {};
+  const sc={};
   (m.schools||[]).forEach(s=>{ sc[s.id]={name:s.name,olympic:0,traditional:0}; });
   wcs.filter(wc=>oElig.some(e=>e.wc===wc)).forEach(wc=>{
-    const grp=oElig.filter(e=>e.wc===wc).map(e=>({e,tot:_olympicTotal(e)})).sort(_rankCmp);
+    const grp=oElig.filter(e=>e.wc===wc).map(e=>({e,tot:_olympicTotal(e)})).sort((a,b)=>b.tot-a.tot);
     let p=0; grp.forEach(r=>{ if(r.tot>0&&sc[r.e.schoolId]&&p<pts.length) sc[r.e.schoolId].olympic+=pts[p++]; });
   });
   wcs.filter(wc=>tElig.some(e=>e.wc===wc)).forEach(wc=>{
-    const grp=tElig.filter(e=>e.wc===wc).map(e=>({e,tot:_traditionalTotal(e)})).sort(_rankCmp);
+    const grp=tElig.filter(e=>e.wc===wc).map(e=>({e,tot:_traditionalTotal(e)})).sort((a,b)=>b.tot-a.tot);
     let p=0; grp.forEach(r=>{ if(r.tot>0&&sc[r.e.schoolId]&&p<pts.length) sc[r.e.schoolId].traditional+=pts[p++]; });
   });
-  const sorted=Object.values(sc).map(s=>({...s,total:s.olympic+s.traditional})).sort((a,b)=>b.total-a.total);
-  document.getElementById('team-scores').innerHTML=sorted.map((s,i)=>`
-    <div style="display:flex;align-items:center;gap:10px;padding:8px;border-radius:5px;margin-bottom:5px;${i===0?'background:var(--gold-a15);':''}">
-      <div style="font-size:18px;font-weight:700;width:26px;color:${i===0?'var(--gold)':'#555'}">${i+1}</div>
-      <div style="flex:1;font-size:16px;font-weight:600;">${esc(s.name)}</div>
-      <div style="font-size:24px;font-weight:700;color:var(--gold);">${s.total}</div>
-    </div>`).join('');
+  const allTeams=[...Object.values(sc)];
+  const oTeams=[...allTeams].sort((a,b)=>b.olympic-a.olympic);
+  const tTeams=[...allTeams].sort((a,b)=>b.traditional-a.traditional);
+  const mkTR=(s,i,p)=>`<div style="display:flex;align-items:center;gap:8px;padding:6px 5px;border-radius:4px;${i===0&&p>0?'background:var(--gold-a15);':''}">
+    <div style="font-size:14px;font-weight:700;width:20px;color:${i===0&&p>0?'var(--gold)':'#555'};">${i+1}</div>
+    <div style="flex:1;font-size:13px;font-weight:600;">${esc(s.name)}</div>
+    <div style="font-family:'Barlow Condensed',Arial,sans-serif;font-size:18px;font-weight:700;color:${p>0?'var(--gold)':'#555'};">${p}</div>
+  </div>`;
+  const tsub=(lbl,mt)=>`<div class="sb-label" style="${mt?'margin-top:12px;':''}padding-bottom:3px;border-bottom:1px solid #222;">${lbl}</div>`;
+  document.getElementById('team-scores').innerHTML=
+    tsub('OLYMPIC')+oTeams.map((s,i)=>mkTR(s,i,s.olympic)).join('')+
+    tsub('TRADITIONAL',true)+tTeams.map((s,i)=>mkTR(s,i,s.traditional)).join('');
 }
 
 // ── Bar input enter key ──────────────────────────────────────────────────────

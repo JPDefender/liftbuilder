@@ -886,9 +886,31 @@ const HM = (() => {
                   </div>
                 ` : isDone ? `
                   <div style="font-size:13px;color:#5EC08A;font-weight:600;padding:8px 0;">All lifters finished 🏆</div>
-                ` : `
-                  <div style="font-size:12px;color:var(--muted);padding:8px 0;">${bw?`Bar at ${bw} lbs — waiting for check-in`:'Waiting for bar weight'}</div>
-                `}
+                ` : (() => {
+                  const ll = m.lastLift;
+                  const hasLL = ll && ll.platform === pNum && !phaseComplete;
+                  if (hasLL) {
+                    const resGood = ll.result === 'good';
+                    return `
+                      <div style="font-size:9px;font-weight:700;letter-spacing:1.5px;color:var(--muted);margin-bottom:5px;">LAST LIFT</div>
+                      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                        <div style="font-size:15px;font-weight:700;">${esc(ll.name)}</div>
+                        <span style="font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:700;color:${resGood?'#5EC08A':'#E07070'};">${resGood?'✓ GOOD':'✗ NO LIFT'}</span>
+                        <span style="font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:700;color:var(--gold);">${ll.declared} lbs</span>
+                      </div>
+                      ${bw?`<div style="font-size:11px;color:var(--muted);margin-top:5px;">Bar: <span style="font-family:'Barlow Condensed',sans-serif;font-weight:700;color:var(--white);">${bw} lbs</span> · ${roundLabel} — waiting for check-in</div>`:''}`;
+                  }
+                  return bw ? `
+                    <div style="font-size:9px;font-weight:700;letter-spacing:1.5px;color:var(--muted);margin-bottom:6px;">BAR LOADED</div>
+                    <div style="display:flex;align-items:baseline;gap:5px;">
+                      <span style="font-family:'Barlow Condensed',sans-serif;font-size:30px;font-weight:700;color:var(--gold);">${bw}</span>
+                      <span style="font-size:13px;color:var(--muted);">lbs</span>
+                      <span style="font-size:13px;color:#444;">·</span>
+                      <span style="font-size:13px;font-weight:600;color:var(--white);">${roundLabel} Attempt</span>
+                    </div>
+                    <div style="font-size:11px;color:var(--muted);margin-top:3px;">Waiting for check-in…</div>
+                  ` : `<div style="font-size:12px;color:var(--muted);padding:8px 0;">Waiting for bar weight</div>`;
+                })()}
               </div>
 
               ${(() => {
@@ -1006,191 +1028,123 @@ const HM = (() => {
   //  SCOREBOARD
   // ══════════════════════════════════════════════════════════════════════════
   function _buildScoreboard(m) {
-    const wcs  = _wcs(m.gender);
-    const N    = m.schools.length;
-    const pts  = _teamPoints(N);
+    const wcs    = _wcs(m.gender);
+    const N      = m.schools.length;
+    const pts    = _teamPoints(N);
+    const isOlyE = e => e.discipline==='both'||e.discipline==='olympic';
+    const isTrdE = e => e.discipline==='both'||e.discipline==='traditional';
+    const isExE  = e => e.discipline==='exhibition';
+    const oElig  = m.entries.filter(isOlyE);
+    const tElig  = m.entries.filter(isTrdE);
 
-    const thS  = 'padding:3px 7px;font-family:\'Barlow Condensed\',sans-serif;font-size:9px;color:var(--muted);text-align:center;';
-    const thSR = thS + 'text-align:right;';
+    const oPts = {}, tPts = {};
+    wcs.filter(wc => oElig.some(e=>e.wc===wc)).forEach(wc => {
+      const g = oElig.filter(e=>e.wc===wc).map(e=>({e,tot:_olympicTotal(e)})).sort((a,b)=>b.tot-a.tot);
+      let p=0; g.forEach(r=>{ if(r.tot>0&&p<pts.length) oPts[r.e.id]={pts:pts[p],place:++p}; });
+    });
+    wcs.filter(wc => tElig.some(e=>e.wc===wc)).forEach(wc => {
+      const g = tElig.filter(e=>e.wc===wc).map(e=>({e,tot:_traditionalTotal(e)})).sort((a,b)=>b.tot-a.tot);
+      let p=0; g.forEach(r=>{ if(r.tot>0&&p<pts.length) tPts[r.e.id]={pts:pts[p],place:++p}; });
+    });
 
-    const tabBtn = (key, label) =>
-      `<button onclick="HM._setScoreTab('${key}')"
-        style="flex:1;padding:6px 4px;border:none;cursor:pointer;font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:600;letter-spacing:.5px;
-        background:${_scoreTab===key?'var(--gold-a15)':'var(--dark3)'};
-        color:${_scoreTab===key?'var(--gold)':'var(--muted)'};
-        border-bottom:2px solid ${_scoreTab===key?'var(--gold)':'transparent'};">${label}</button>`;
-
-    // ── helpers shared by both individual tabs ────────────────────────────────
-    function wcSection(wc, headerRow, bodyRows) {
-      return `
-        <div style="margin-bottom:.75rem;">
-          <div style="padding:4px 7px;background:var(--dark3);font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:600;letter-spacing:.5px;">${wc} LBS</div>
-          <table style="width:100%;border-collapse:collapse;"><thead>${headerRow}</thead><tbody>${bodyRows}</tbody></table>
-        </div>`;
+    function chip(att) {
+      if (!att||!att.declared) return `<span style="display:inline-block;min-width:26px;text-align:center;font-size:10px;color:#2a2a2a;padding:1px 2px;">—</span>`;
+      if (att.result==='good') return `<span style="display:inline-block;min-width:26px;text-align:center;font-size:10px;font-weight:700;color:#5EC08A;background:rgba(94,192,138,.2);border:1px solid rgba(94,192,138,.4);border-radius:3px;padding:1px 2px;">${att.declared}</span>`;
+      if (att.result==='miss') return `<span style="display:inline-block;min-width:26px;text-align:center;font-size:10px;font-weight:700;color:#E07070;background:rgba(224,112,112,.15);border:1px solid rgba(224,112,112,.35);border-radius:3px;padding:1px 2px;text-decoration:line-through;">${att.declared}</span>`;
+      return `<span style="display:inline-block;min-width:26px;text-align:center;font-size:10px;color:#666;background:rgba(255,255,255,.06);border:1px solid #333;border-radius:3px;padding:1px 2px;">${att.declared}</span>`;
     }
 
-    function teamTable(title, rows) {
-      return `
-        <div style="margin-bottom:1.25rem;">
-          <div style="padding:5px 7px;background:rgba(201,168,76,.12);border-bottom:1px solid var(--gold-a15);font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:700;letter-spacing:1px;color:var(--gold);">${title}</div>
-          <table style="width:100%;border-collapse:collapse;">
-            <thead><tr>
-              <th style="${thS}">Place</th>
-              <th style="${thS}text-align:left;">School</th>
-              <th style="${thSR}">PTS</th>
-            </tr></thead>
-            <tbody>${rows}</tbody>
-          </table>
-        </div>`;
-    }
-
-    let content = '';
-
-    // ── Olympic individual tab ────────────────────────────────────────────────
-    if (_scoreTab === 'olympic') {
-      const elig = m.entries.filter(e => e.discipline === 'both' || e.discipline === 'olympic');
-      content = !elig.length
-        ? `<div class="empty-msg" style="padding:1.5rem;font-size:13px;">No Olympic-division athletes.</div>`
-        : wcs.filter(wc => elig.some(e => e.wc === wc)).map(wc => {
-            const group = elig.filter(e => e.wc === wc)
-              .map(e => ({ e, sn: _bestMade(e.snatch), cj: _bestMade(e.cj), tot: _olympicTotal(e) }))
-              .sort(_rankCmp);
-            let pIdx = -1;
-            const rows = group.map(r => {
-              if (r.tot > 0) pIdx++;
-              const placeNum    = r.tot > 0 ? pIdx + 1 : null;
-              const earnedPts   = placeNum && pIdx < pts.length ? pts[pIdx] : null;
-              const medal       = placeNum === 1 ? '🥇' : placeNum === 2 ? '🥈' : placeNum === 3 ? '🥉' : null;
-              const placeDisplay = medal || placeNum || '—';
-              const sch = m.schools.find(s => s.id === r.e.schoolId);
-              const schColor = sch?.color || '#555';
-              return `<tr style="border-bottom:1px solid var(--dark3);">
-                <td style="padding:5px 7px;font-size:${medal?'15px':'13px'};font-weight:700;">${placeDisplay}</td>
-                <td style="padding:5px 7px;font-size:13px;"><span style="border-bottom:2px solid ${schColor};padding-bottom:1px;">${esc(r.e.name)}</span></td>
-                <td style="padding:5px 7px;font-size:11px;color:var(--muted);">${esc(sch?.name||'')}</td>
-                <td style="padding:5px 7px;text-align:right;font-family:'Barlow Condensed',sans-serif;font-size:12px;">${r.sn||'—'}</td>
-                <td style="padding:5px 7px;text-align:right;font-family:'Barlow Condensed',sans-serif;font-size:12px;">${r.cj||'—'}</td>
-                <td style="padding:5px 7px;text-align:right;font-family:'Barlow Condensed',sans-serif;font-weight:700;color:${r.tot?'var(--gold)':'#E07070'};">${r.tot||'0'}</td>
-                <td style="padding:5px 7px;text-align:right;font-family:'Barlow Condensed',sans-serif;font-size:11px;color:${earnedPts?'#5EC08A':'var(--muted)'};">${earnedPts!=null?'+'+earnedPts:'—'}</td>
-              </tr>`;
-            }).join('');
-            const hdr = `<tr><th style="${thS}">Place</th><th style="${thS}text-align:left;">Athlete</th><th style="${thS}text-align:left;">School</th><th style="${thSR}">SN</th><th style="${thSR}">CJ</th><th style="${thSR}">TOT</th><th style="${thSR}">PTS</th></tr>`;
-            return wcSection(wc, hdr, rows);
-          }).join('');
-
-    // ── Traditional individual tab ────────────────────────────────────────────
-    } else if (_scoreTab === 'traditional') {
-      const elig = m.entries.filter(e => e.discipline === 'both' || e.discipline === 'traditional');
-      content = !elig.length
-        ? `<div class="empty-msg" style="padding:1.5rem;font-size:13px;">No Traditional-division athletes.</div>`
-        : wcs.filter(wc => elig.some(e => e.wc === wc)).map(wc => {
-            const group = elig.filter(e => e.wc === wc)
-              .map(e => ({ e, cj: _bestMade(e.cj), bn: _bestMade(e.bench), tot: _traditionalTotal(e) }))
-              .sort(_rankCmp);
-            let pIdx = -1;
-            const rows = group.map(r => {
-              if (r.tot > 0) pIdx++;
-              const placeNum    = r.tot > 0 ? pIdx + 1 : null;
-              const earnedPts   = placeNum && pIdx < pts.length ? pts[pIdx] : null;
-              const medal       = placeNum === 1 ? '🥇' : placeNum === 2 ? '🥈' : placeNum === 3 ? '🥉' : null;
-              const placeDisplay = medal || placeNum || '—';
-              const sch = m.schools.find(s => s.id === r.e.schoolId);
-              const schColor = sch?.color || '#555';
-              return `<tr style="border-bottom:1px solid var(--dark3);">
-                <td style="padding:5px 7px;font-size:${medal?'15px':'13px'};font-weight:700;">${placeDisplay}</td>
-                <td style="padding:5px 7px;font-size:13px;"><span style="border-bottom:2px solid ${schColor};padding-bottom:1px;">${esc(r.e.name)}</span></td>
-                <td style="padding:5px 7px;font-size:11px;color:var(--muted);">${esc(sch?.name||'')}</td>
-                <td style="padding:5px 7px;text-align:right;font-family:'Barlow Condensed',sans-serif;font-size:12px;">${r.cj||'—'}</td>
-                <td style="padding:5px 7px;text-align:right;font-family:'Barlow Condensed',sans-serif;font-size:12px;">${r.bn||'—'}</td>
-                <td style="padding:5px 7px;text-align:right;font-family:'Barlow Condensed',sans-serif;font-weight:700;color:${r.tot?'var(--gold)':'#E07070'};">${r.tot||'0'}</td>
-                <td style="padding:5px 7px;text-align:right;font-family:'Barlow Condensed',sans-serif;font-size:11px;color:${earnedPts?'#5EC08A':'var(--muted)'};">${earnedPts!=null?'+'+earnedPts:'—'}</td>
-              </tr>`;
-            }).join('');
-            const hdr = `<tr><th style="${thS}">Place</th><th style="${thS}text-align:left;">Athlete</th><th style="${thS}text-align:left;">School</th><th style="${thSR}">C&amp;J</th><th style="${thSR}">Bench</th><th style="${thSR}">TOT</th><th style="${thSR}">PTS</th></tr>`;
-            return wcSection(wc, hdr, rows);
-          }).join('');
-
-    // ── Team tab ──────────────────────────────────────────────────────────────
-    } else {
-      const scores = {};
-      m.schools.forEach(s => { scores[s.id] = { id: s.id, name: s.name, olympic: 0, traditional: 0 }; });
-
-      const oElig = m.entries.filter(e => e.discipline === 'both' || e.discipline === 'olympic');
-      wcs.filter(wc => oElig.some(e => e.wc === wc)).forEach(wc => {
-        const grp = oElig.filter(e => e.wc === wc)
-          .map(e => ({ e, tot: _olympicTotal(e) }))
-          .sort(_rankCmp);
-        let p = 0;
-        grp.forEach(r => {
-          if (r.tot > 0 && scores[r.e.schoolId] && p < pts.length) {
-            scores[r.e.schoolId].olympic += pts[p++];
-          }
-        });
+    const usedWcs = wcs.filter(wc => m.entries.some(e=>e.wc===wc));
+    const indivHtml = usedWcs.map(wc => {
+      const grp = m.entries.filter(e=>e.wc===wc).map(e=>({
+        e,
+        oTot: isOlyE(e)||isExE(e) ? _olympicTotal(e) : 0,
+        tTot: isTrdE(e)||isExE(e) ? _traditionalTotal(e) : 0,
+      })).sort((a,b)=>{
+        const aM=Math.max(a.oTot,a.tTot), bM=Math.max(b.oTot,b.tTot);
+        if(bM!==aM) return bM-aM;
+        return (parseFloat(a.e.weighIn)||parseFloat(a.e.wc)||999)-(parseFloat(b.e.weighIn)||parseFloat(b.e.wc)||999);
       });
-
-      const tElig = m.entries.filter(e => e.discipline === 'both' || e.discipline === 'traditional');
-      wcs.filter(wc => tElig.some(e => e.wc === wc)).forEach(wc => {
-        const grp = tElig.filter(e => e.wc === wc)
-          .map(e => ({ e, tot: _traditionalTotal(e) }))
-          .sort(_rankCmp);
-        let p = 0;
-        grp.forEach(r => {
-          if (r.tot > 0 && scores[r.e.schoolId] && p < pts.length) {
-            scores[r.e.schoolId].traditional += pts[p++];
-          }
-        });
-      });
-
-      const allSchools = Object.values(scores);
-
-      const oSorted = [...allSchools].sort((a,b) => b.olympic - a.olympic);
-      const oRows = oSorted.map((s, i) => `
-        <tr style="border-bottom:1px solid var(--dark3);">
-          <td style="padding:6px 8px;font-family:'Barlow Condensed',sans-serif;font-weight:700;color:${i===0&&s.olympic>0?'var(--gold)':'var(--muted)'};">${i+1}</td>
-          <td style="padding:6px 8px;font-size:13px;font-weight:600;">${esc(s.name)}</td>
-          <td style="padding:6px 8px;text-align:right;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:15px;color:${s.olympic>0?(i===0?'var(--gold)':'var(--white)'):'var(--muted)'};">${s.olympic}</td>
-        </tr>`).join('');
-
-      const tSorted = [...allSchools].sort((a,b) => b.traditional - a.traditional);
-      const tRows = tSorted.map((s, i) => `
-        <tr style="border-bottom:1px solid var(--dark3);">
-          <td style="padding:6px 8px;font-family:'Barlow Condensed',sans-serif;font-weight:700;color:${i===0&&s.traditional>0?'var(--gold)':'var(--muted)'};">${i+1}</td>
-          <td style="padding:6px 8px;font-size:13px;font-weight:600;">${esc(s.name)}</td>
-          <td style="padding:6px 8px;text-align:right;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:15px;color:${s.traditional>0?(i===0?'var(--gold)':'var(--white)'):'var(--muted)'};">${s.traditional}</td>
-        </tr>`).join('');
-
-      const combined = allSchools.map(s => ({ ...s, total: s.olympic + s.traditional })).sort((a,b) => b.total - a.total);
-      const cRows = combined.map((s, i) => `
-        <tr style="border-bottom:1px solid var(--dark3);">
-          <td style="padding:6px 8px;font-family:'Barlow Condensed',sans-serif;font-weight:700;color:${i===0&&s.total>0?'var(--gold)':'var(--muted)'};">${i+1}</td>
-          <td style="padding:6px 8px;font-size:13px;font-weight:600;">${esc(s.name)}</td>
-          <td style="padding:6px 8px;text-align:right;font-family:'Barlow Condensed',sans-serif;font-size:12px;color:var(--muted);">${s.olympic} + ${s.traditional}</td>
-          <td style="padding:6px 8px;text-align:right;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:16px;color:${s.total>0?(i===0?'var(--gold)':'var(--white)'):'var(--muted)'};">${s.total}</td>
-        </tr>`).join('');
-      const combinedTable = `
-        <div style="margin-bottom:1.25rem;">
-          <div style="padding:5px 7px;background:rgba(201,168,76,.12);border-bottom:1px solid var(--gold-a15);font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:700;letter-spacing:1px;color:var(--gold);">COMBINED TOTAL</div>
-          <table style="width:100%;border-collapse:collapse;">
-            <thead><tr>
-              <th style="${thS}">Place</th>
-              <th style="${thS}text-align:left;">School</th>
-              <th style="${thSR}">OLY + TRAD</th>
-              <th style="${thSR}">TOTAL</th>
-            </tr></thead>
-            <tbody>${cRows}</tbody>
-          </table>
+      if (!grp.length) return '';
+      let placed = 0;
+      const rows = grp.map(({e, oTot, tTot}) => {
+        const sch    = m.schools.find(s=>s.id===e.schoolId);
+        const ex     = isExE(e);
+        const maxTot = Math.max(oTot, tTot);
+        if (!ex && maxTot>0) placed++;
+        const medal    = placed===1?'🥇':placed===2?'🥈':placed===3?'🥉':null;
+        const placeStr = !ex&&maxTot>0 ? (medal||String(placed)) : '—';
+        const isFirst  = placed===1 && !ex && maxTot>0;
+        const oInfo    = oPts[e.id], tInfo = tPts[e.id];
+        const oStr     = (isOlyE(e)||ex) ? (oTot||'—') : '—';
+        const tStr     = (isTrdE(e)||ex) ? (tTot||'—') : '—';
+        const lbl      = 'font-size:8px;font-weight:700;letter-spacing:1px;color:#555;';
+        return `<div style="display:flex;align-items:center;gap:4px;padding:4px 5px;border-radius:4px;margin-bottom:2px;${isFirst?'background:rgba(201,168,76,.08);':''}">
+          <div style="font-size:${medal?'13px':'11px'};font-weight:700;width:16px;flex-shrink:0;color:${!ex&&placed<=3?'var(--gold)':'#555'};">${placeStr}</div>
+          <div style="width:70px;flex-shrink:0;min-width:0;">
+            <div style="font-size:11px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(e.name)}${ex?' <span style="font-size:8px;color:#555;">[EX]</span>':''}</div>
+            <div style="font-size:9px;color:#666;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(sch?.name||'')}</div>
+          </div>
+          <div style="flex:1;display:flex;align-items:center;gap:2px;min-width:0;overflow:hidden;">
+            <span style="${lbl}width:12px;">SN</span>${(e.snatch||[]).map(chip).join('')}
+            <span style="${lbl}width:12px;margin-left:2px;">CJ</span>${(e.cj||[]).map(chip).join('')}
+            <span style="${lbl}width:12px;margin-left:2px;">BN</span>${(e.bench||[]).map(chip).join('')}
+          </div>
+          <div style="flex-shrink:0;display:flex;flex-direction:column;align-items:flex-end;gap:1px;">
+            <div style="display:flex;align-items:baseline;gap:2px;">
+              <span style="${lbl}">OLY</span>
+              <span style="font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;color:${oTot?'var(--gold)':'#555'};line-height:1;">${oStr}</span>
+              ${oInfo&&!ex?`<span style="font-size:8px;font-weight:700;color:#888;">${oInfo.pts}pt</span>`:''}
+            </div>
+            <div style="display:flex;align-items:baseline;gap:2px;">
+              <span style="${lbl}">TRD</span>
+              <span style="font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;color:${tTot?'var(--gold)':'#555'};line-height:1;">${tStr}</span>
+              ${tInfo&&!ex?`<span style="font-size:8px;font-weight:700;color:#888;">${tInfo.pts}pt</span>`:''}
+            </div>
+          </div>
         </div>`;
+      }).join('');
+      return `<div style="margin-bottom:.75rem;">
+        <div style="padding:4px 7px;background:var(--dark3);font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:600;letter-spacing:.5px;">${wc} LBS</div>
+        ${rows}
+      </div>`;
+    }).join('');
 
-      content = teamTable('OLYMPIC TEAM SCORES', oRows) + teamTable('TRADITIONAL TEAM SCORES', tRows) + combinedTable;
-    }
+    // Team scores
+    const scores = {};
+    m.schools.forEach(s => { scores[s.id] = { name: s.name, olympic: 0, traditional: 0 }; });
+    wcs.filter(wc => oElig.some(e=>e.wc===wc)).forEach(wc => {
+      const grp = oElig.filter(e=>e.wc===wc).map(e=>({e,tot:_olympicTotal(e)})).sort((a,b)=>b.tot-a.tot);
+      let p=0; grp.forEach(r=>{ if(r.tot>0&&scores[r.e.schoolId]&&p<pts.length) scores[r.e.schoolId].olympic+=pts[p++]; });
+    });
+    wcs.filter(wc => tElig.some(e=>e.wc===wc)).forEach(wc => {
+      const grp = tElig.filter(e=>e.wc===wc).map(e=>({e,tot:_traditionalTotal(e)})).sort((a,b)=>b.tot-a.tot);
+      let p=0; grp.forEach(r=>{ if(r.tot>0&&scores[r.e.schoolId]&&p<pts.length) scores[r.e.schoolId].traditional+=pts[p++]; });
+    });
+    const allTeams = Object.values(scores);
+    const oTeams   = [...allTeams].sort((a,b) => b.olympic - a.olympic);
+    const tTeams   = [...allTeams].sort((a,b) => b.traditional - a.traditional);
+    const mkTR = (s,i,p) => `
+      <div style="display:flex;align-items:center;gap:6px;padding:5px;border-radius:4px;${i===0&&p>0?'background:rgba(201,168,76,.1);':''}">
+        <div style="font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;width:16px;color:${i===0&&p>0?'var(--gold)':'#555'};">${i+1}</div>
+        <div style="flex:1;font-size:12px;font-weight:600;">${esc(s.name)}</div>
+        <div style="font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:700;color:${p>0?'var(--gold)':'#555'};">${p}</div>
+      </div>`;
+    const tsub = (lbl, mt) => `<div style="font-size:9px;font-weight:700;letter-spacing:1.5px;color:var(--muted);${mt?'margin-top:10px;':''}margin-bottom:4px;padding-bottom:3px;border-bottom:1px solid var(--dark3);">${lbl}</div>`;
+    const teamHtml = allTeams.length ? `
+      <div style="margin-top:.75rem;border-top:1px solid var(--dark3);padding-top:.75rem;">
+        <div style="font-size:9px;font-weight:700;letter-spacing:2px;color:#555;margin-bottom:6px;">TEAM SCORES</div>
+        ${tsub('OLYMPIC',false)}${oTeams.map((s,i)=>mkTR(s,i,s.olympic)).join('')}
+        ${tsub('TRADITIONAL',true)}${tTeams.map((s,i)=>mkTR(s,i,s.traditional)).join('')}
+      </div>` : '';
 
     return `
       <div class="chart-card" style="padding:0;overflow:hidden;">
         <div style="padding:8px 12px;border-bottom:1px solid var(--dark3);font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:600;letter-spacing:1px;color:var(--muted);">LIVE SCOREBOARD</div>
-        <div style="display:flex;border-bottom:1px solid var(--dark3);">
-          ${tabBtn('olympic','Olympic')}${tabBtn('traditional','Traditional')}${tabBtn('team','Team')}
+        <div style="padding:.75rem;max-height:60vh;overflow-y:auto;">
+          ${indivHtml||'<div style="color:#444;font-size:13px;">No entries yet</div>'}
+          ${teamHtml}
         </div>
-        <div style="padding:.75rem;max-height:60vh;overflow-y:auto;">${content}</div>
       </div>`;
   }
 
