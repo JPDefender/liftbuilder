@@ -466,7 +466,7 @@ function createWindow() {
 app.whenReady().then(() => {
   // ── IPC handlers ───────────────────────────────────────────────────────────
   ipcMain.handle('check-for-updates',  () => getUpdater().checkForUpdates());
-  ipcMain.handle('open-releases-page', () => shell.openExternal('https://github.com/JPDefender/liftbuilder/releases/latest'));
+  ipcMain.handle('open-releases-page', () => shell.openExternal('https://github.com/SoftMetapod/liftbuilder/releases/latest'));
   ipcMain.handle('get-version',        () => app.getVersion());
 
   ipcMain.handle('export-pdf', async (event, html) => {
