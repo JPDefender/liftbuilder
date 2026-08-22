@@ -1,0 +1,94 @@
+{
+  "name": "liftbuilder",
+  "version": "5.6.0",
+  "description": "LiftBuilder — Weightlifting Program Manager",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder",
+    "build:mac": "electron-builder --mac",
+    "build:win": "electron-builder --win",
+    "publish:mac": "electron-builder --mac --publish always",
+    "publish:win": "electron-builder --win --publish always",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:security": "vitest run test/security"
+  },
+  "build": {
+    "appId": "com.liftbuilder.app",
+    "productName": "LiftBuilder",
+    "copyright": "Copyright © 2026 LiftBuilder",
+    "files": [
+      "index.html",
+      "host-meet.js",
+      "host-meet-display.html",
+      "platform-client.html",
+      "platform-display.html",
+      "platform-scoreboard.html",
+      "referee.html",
+      "main.js",
+      "preload.js",
+      "vendor/**"
+    ],
+    "mac": {
+      "category": "public.app-category.sports",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "universal"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "universal"
+          ]
+        }
+      ],
+      "icon": "build/icon.icns"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.ico"
+    },
+    "dmg": {
+      "title": "LiftBuilder",
+      "background": null,
+      "window": {
+        "width": 540,
+        "height": 380
+      }
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "SoftMetapod",
+      "repo": "liftbuilder",
+      "releaseType": "release"
+    }
+  },
+  "devDependencies": {
+    "@vitest/coverage-v8": "4.1.6",
+    "dompurify": "3.4.11",
+    "electron": "39.8.5",
+    "electron-builder": "26.15.0",
+    "jsdom": "29.1.1",
+    "vitest": "4.1.6"
+  },
+  "dependencies": {
+    "electron-updater": "6.8.3",
+    "express": "^5.2.1",
+    "socket.io": "^4.8.3"
+  }
+}
