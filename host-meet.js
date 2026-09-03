@@ -38,6 +38,7 @@ const HM = (() => {
   let _platformInfo         = null;  // { ip, port, token }
   let _platformSyncLock     = false; // prevents circular sync loops
   let _connectedPlatforms   = [];    // pNums currently connected, from server broadcasts
+  let _webSocket            = null;  // socket.io connection when running in web mode (no Electron)
   let _clockStart           = null;  // ms timestamp when clock started (single-platform mode)
   let _clockDuration        = null;  // 60 or 120 seconds
   let _clockPausedRemaining = null;  // ms remaining when paused, null if running or no clock
@@ -52,7 +53,10 @@ const HM = (() => {
     _saveDisplayState();
     if (_platformActive && !_platformSyncLock) {
       const m = _meet();
-      if (m) window.liftbuilderApp?.syncPlatformState?.(m);
+      if (m) {
+        if (window.liftbuilderApp?.syncPlatformState) window.liftbuilderApp.syncPlatformState(m);
+        else if (_webSocket) _webSocket.emit('sync-state', m);
+      }
     }
   }
   function _saveDisplayState() {
@@ -262,7 +266,7 @@ const HM = (() => {
               </div>
             </div>`;
         }).join('')
-      : `<div class="empty-msg" style="padding:4rem;">No hosted meets yet.<br>Create one to get started.</div>`;
+      : `<div class="empty-msg" style="padding:4rem;">No hosted meets yet.<br><br><button onclick="HM.newMeet()" class="btn btn-gold" style="font-size:14px;padding:8px 20px;">+ New Meet</button></div>`;
 
     return `<div style="max-width:800px;">${cards}</div>`;
   }
@@ -1845,7 +1849,10 @@ const HM = (() => {
   // ── Timer ──────────────────────────────────────────────────────────────────
   function _syncTimer() {
     _saveDisplayState();
-    if (_platformActive) window.liftbuilderApp?.directorTimerSync?.({ timerEndMs: _timerEndMs, timerPausedRem: _timerPausedRem });
+    if (_platformActive) {
+      if (window.liftbuilderApp?.directorTimerSync) window.liftbuilderApp.directorTimerSync({ timerEndMs: _timerEndMs, timerPausedRem: _timerPausedRem });
+      // web: timer state is carried in the full sync-state emit via _save()
+    }
   }
 
   function startTimer(secs) {
@@ -1908,15 +1915,18 @@ const HM = (() => {
 
   // ── Athlete clock controls (multi-platform, director) ─────────────────────
   async function directorPauseClock(pNum) {
-    await window.liftbuilderApp?.directorPauseClock?.(pNum);
+    if (window.liftbuilderApp?.directorPauseClock) await window.liftbuilderApp.directorPauseClock(pNum);
+    else _webSocket?.emit('director-pause-clock', { pNum });
   }
 
   async function directorResumeClock(pNum) {
-    await window.liftbuilderApp?.directorResumeClock?.(pNum);
+    if (window.liftbuilderApp?.directorResumeClock) await window.liftbuilderApp.directorResumeClock(pNum);
+    else _webSocket?.emit('director-resume-clock', { pNum });
   }
 
   async function directorResetClock(pNum) {
-    await window.liftbuilderApp?.directorResetClock?.(pNum);
+    if (window.liftbuilderApp?.directorResetClock) await window.liftbuilderApp.directorResetClock(pNum);
+    else _webSocket?.emit('director-reset-clock', { pNum });
   }
 
   function _onCompMounted() {
@@ -2319,9 +2329,6 @@ const HM = (() => {
   async function startPlatforms() {
     const m = _meet(); if (!m) return;
     autoSaveSetup();
-    if (!window.liftbuilderApp?.startPlatformServer) {
-      showToast('Platform server requires the desktop app.'); return;
-    }
     // Initialise platformStates for each platform
     if (!m.platformStates) m.platformStates = {};
     for (let i = 1; i <= m.numPlatforms; i++) {
@@ -2330,16 +2337,35 @@ const HM = (() => {
       }
     }
     _save();
-    const result = await window.liftbuilderApp.startPlatformServer(m);
-    if (!result.success) { showToast('Server failed: ' + (result.error||'unknown error')); return; }
-    _platformActive = true;
-    _platformInfo   = { ip: result.ip, port: result.port, token: result.token || '' };
-    // Listen for state updates from the server
-    window.liftbuilderApp.onPlatformStateSync(_applyPlatformSync);
-    // Push current timer state to the server immediately
-    _syncTimer();
-    renderMain();
-    showToast(`Platforms live at ${result.ip}:${result.port}`);
+
+    if (window.liftbuilderApp?.startPlatformServer) {
+      // ── Electron path ──
+      const result = await window.liftbuilderApp.startPlatformServer(m);
+      if (!result.success) { showToast('Server failed: ' + (result.error||'unknown error')); return; }
+      _platformActive = true;
+      _platformInfo   = { ip: result.ip, port: result.port, token: result.token || '' };
+      window.liftbuilderApp.onPlatformStateSync(_applyPlatformSync);
+      _syncTimer();
+      renderMain();
+      showToast(`Platforms live at ${result.ip}:${result.port}`);
+    } else {
+      // ── Web path ──
+      try {
+        const resp   = await fetch('/api/start-platforms', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ meetState: m }) });
+        const result = await resp.json();
+        if (!result.success) { showToast('Server failed: ' + (result.error||'unknown error')); return; }
+        _platformActive = true;
+        _platformInfo   = { ip: result.ip, port: result.port, token: result.pin || '' };
+        // Connect as director via socket.io
+        _webSocket = io({ auth: { directorToken: result.directorToken } });
+        _webSocket.on('state-update', _applyPlatformSync);
+        _syncTimer();
+        renderMain();
+        showToast(`Platforms live at ${result.ip}:${result.port}`);
+      } catch(e) {
+        showToast('Server error: ' + e.message);
+      }
+    }
   }
 
   function copyLink(url) {
@@ -2348,7 +2374,13 @@ const HM = (() => {
 
   async function stopPlatforms() {
     if (!confirm('Stop all platforms? Connected clients will be disconnected.')) return;
-    await window.liftbuilderApp?.stopPlatformServer?.();
+    if (window.liftbuilderApp?.stopPlatformServer) {
+      await window.liftbuilderApp.stopPlatformServer();
+    } else {
+      _webSocket?.disconnect();
+      _webSocket = null;
+      fetch('/api/stop-platforms', { method: 'POST' }).catch(() => {});
+    }
     _platformActive       = false;
     _platformInfo         = null;
     _connectedPlatforms   = [];
@@ -2358,24 +2390,28 @@ const HM = (() => {
   function directorSetBarWeight(pNum) {
     const w = parseInt(prompt(`Platform ${pNum} — Set bar weight (lbs):`));
     if (!w || w < 45) return;
-    window.liftbuilderApp?.directorSetBarWeight?.(pNum, w);
+    if (window.liftbuilderApp?.directorSetBarWeight) window.liftbuilderApp.directorSetBarWeight(pNum, w);
+    else _webSocket?.emit('director-set-bar-weight', { pNum, weight: w });
   }
 
   function directorAdvanceRound(pNum) {
     if (!confirm(`Platform ${pNum} — Advance to next attempt round?`)) return;
-    window.liftbuilderApp?.directorAdvanceRound?.(pNum);
+    if (window.liftbuilderApp?.directorAdvanceRound) window.liftbuilderApp.directorAdvanceRound(pNum);
+    else _webSocket?.emit('director-advance-round', { pNum });
   }
 
   function directorAdvancePhase(pNum) {
     if (!confirm(`Platform ${pNum} — Advance to next phase? Cannot be undone.`)) return;
-    window.liftbuilderApp?.directorAdvancePhase?.(pNum);
+    if (window.liftbuilderApp?.directorAdvancePhase) window.liftbuilderApp.directorAdvancePhase(pNum);
+    else _webSocket?.emit('director-advance-phase', { pNum });
   }
 
   function directorDeclareAttempt(pNum, entryId, lift, attemptIdx, currentWeight) {
     const raw = prompt(`Platform ${pNum} — New declared weight for attempt (current: ${currentWeight} lbs):`);
     const w   = parseInt(raw);
     if (!w || w < 45) return;
-    window.liftbuilderApp?.directorDeclareAttempt?.(entryId, lift, attemptIdx, w);
+    if (window.liftbuilderApp?.directorDeclareAttempt) window.liftbuilderApp.directorDeclareAttempt(entryId, lift, attemptIdx, w);
+    else _webSocket?.emit('director-declare-attempt', { entryId, lift, attemptIdx, weight: w });
   }
 
   function _applyPlatformSync(newMeetState) {
@@ -2750,7 +2786,8 @@ const HM = (() => {
       if (complete) parts.push(`${complete} complete`);
       return title('Host Meet') +
         (parts.length ? sep + `<span style="font-family:'Barlow Condensed',sans-serif;font-size:12px;color:var(--muted);">${parts.join(' · ')}</span>` : '') +
-        spacer + btn('📊 Stats', 'HM.showStats()');
+        spacer + btn('📊 Stats', 'HM.showStats()') +
+        `<button onclick="HM.newMeet()" class="btn btn-gold" style="font-size:12px;padding:5px 14px;">+ New Meet</button>`;
     }
 
     const m = _meet();

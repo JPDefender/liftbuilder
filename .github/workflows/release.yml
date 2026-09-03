@@ -120,8 +120,39 @@ jobs:
             --repo ${{ github.repository }} \
             --clobber
 
+  release-linux:
+    needs: tag
+    if: needs.tag.outputs.skip == 'false'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: v${{ needs.tag.outputs.version }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Linux
+        run: npm run build:linux -- --publish never
+
+      - name: Upload Linux assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "v${{ needs.tag.outputs.version }}" \
+            dist/*.AppImage \
+            dist/latest-linux.yml \
+            --repo ${{ github.repository }} \
+            --clobber
+
   publish:
-    needs: [tag, release-mac, release-win]
+    needs: [tag, release-mac, release-win, release-linux]
     if: needs.tag.outputs.skip == 'false'
     runs-on: ubuntu-latest
 
