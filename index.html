@@ -259,7 +259,7 @@ select option{background:#232323;}
   <div class="header-nav" id="header-nav"></div>
   <div style="flex:1;"></div>
   <span id="save-badge" style="font-size:11px;color:#5EC08A;opacity:0;transition:opacity 0.4s;margin-right:4px;">✓ Saved</span>
-  <button id="sync-btn" onclick="openSyncSettings()" title="Cloud Sync" style="display:none;background:none;border:none;cursor:pointer;padding:4px 6px;border-radius:4px;display:flex;align-items:center;gap:4px;">
+  <button id="sync-btn" onclick="openSyncSettings()" title="Cloud Sync" style="background:none;border:none;cursor:pointer;padding:4px 6px;border-radius:4px;display:flex;align-items:center;gap:4px;">
     <span id="sync-icon" style="font-size:15px;color:var(--muted);">☁</span>
   </button>
   <div id="header-actions" style="display:flex;align-items:center;gap:6px;margin-left:6px;"></div>
@@ -2961,11 +2961,10 @@ function _renderSyncBtn() {
   const icon = document.getElementById('sync-icon');
   if (!btn || !icon) return;
   const cfg = _syncCfg();
-  if (!cfg) { btn.style.display = 'none'; return; }
-  btn.style.display = 'flex';
-  if      (_syncStatus === 'syncing') { icon.textContent = '↻'; icon.style.color = 'var(--gold)';   btn.title = 'Syncing…'; }
+  if (!cfg)                           { icon.textContent = '☁'; icon.style.color = 'var(--muted)';  btn.title = 'Set up Cloud Sync'; }
+  else if (_syncStatus === 'syncing') { icon.textContent = '↻'; icon.style.color = 'var(--gold)';   btn.title = 'Syncing…'; }
   else if (_syncStatus === 'ok')      { icon.textContent = '☁'; icon.style.color = '#5EC08A';        btn.title = 'Synced'; }
-  else if (_syncStatus === 'error')   { icon.textContent = '☁'; icon.style.color = '#E07070';        btn.title = 'Sync error — click to open settings'; }
+  else if (_syncStatus === 'error')   { icon.textContent = '☁'; icon.style.color = '#E07070';        btn.title = 'Sync error — click for settings'; }
   else                                { icon.textContent = '☁'; icon.style.color = 'var(--muted)';  btn.title = 'Cloud Sync'; }
 }
 
