@@ -10,6 +10,66 @@ const HM = (() => {
   const GIRLS_WC = ['101','110','119','129','139','154','169','183','199','UNL'];
   const BOYS_WC  = ['119','129','139','154','169','183','199','219','238','HWT'];
 
+  // FHSAA 2026-27 & 2027-28 school classifications — [name, class, region, district]
+  // Single authoritative list used for both Boys and Girls (per corrected PDF)
+  const _FHSAA_LIST = [
+    // 3A
+    ['Crestview','3A',1,1],['Navarre','3A',1,1],['Niceville','3A',1,1],['Pace','3A',1,1],['Tate (Cantonment)','3A',1,1],
+    ['Atlantic Coast (Jacksonville)','3A',1,2],['First Coast (Jacksonville)','3A',1,2],['Fletcher (Neptune Beach)','3A',1,2],['Mandarin (Jacksonville)','3A',1,2],['Oakleaf (Orange Park)','3A',1,2],['Sandalwood (Jacksonville)','3A',1,2],
+    ['Bartram Trail (St. Johns)','3A',2,3],['Beachside (St. Johns)','3A',2,3],['Buchholz (Gainesville)','3A',2,3],['Creekside (St. Johns)','3A',2,3],['Nease (Ponte Vedra)','3A',2,3],['Ponte Vedra','3A',2,3],['Tocoi Creek (St. Augustine)','3A',2,3],
+    ['DeLand','3A',2,4],['Flagler Palm Coast','3A',2,4],['Forest (Ocala)','3A',2,4],['Mainland (Daytona Beach)','3A',2,4],['Matanzas (Palm Coast)','3A',2,4],['South Marion (Ocala)','3A',2,4],['Spruce Creek (Port Orange)','3A',2,4],['University (Orange City)','3A',2,4],['West Port (Ocala)','3A',2,4],
+    ['Apopka','3A',3,5],['Hagerty (Oviedo)','3A',3,5],['Lake Brantley','3A',3,5],['Lake Howell (Winter Park)','3A',3,5],['Lake Mary','3A',3,5],['Lyman (Longwood)','3A',3,5],['Oviedo','3A',3,5],['Seminole (Sanford)','3A',3,5],['Winter Park','3A',3,5],
+    ['East Ridge (Clermont)','3A',3,6],['Edgewater (Orlando)','3A',3,6],['Evans (Orlando)','3A',3,6],['Lake Minneola','3A',3,6],['Ocoee','3A',3,6],['Olympia (Orlando)','3A',3,6],['South Lake (Groveland)','3A',3,6],['Wekiva (Apopka)','3A',3,6],['West Orange (Winter Garden)','3A',3,6],
+    ['Boone (Orlando)','3A',4,7],['Colonial (Orlando)','3A',4,7],['Dr. Phillips (Orlando)','3A',4,7],['East River (Orlando)','3A',4,7],['Innovation (Orlando)','3A',4,7],['Lake Nona (Orlando)','3A',4,7],['Oak Ridge (Orlando)','3A',4,7],['Timber Creek (Orlando)','3A',4,7],['University (Orlando)','3A',4,7],
+    ['Cypress Creek (Orlando)','3A',4,8],['Freedom (Orlando)','3A',4,8],['Gateway (Kissimmee)','3A',4,8],['Harmony','3A',4,8],['Horizon (Winter Garden)','3A',4,8],['Lake Buena Vista (Orlando)','3A',4,8],['St. Cloud','3A',4,8],['Tohopekaliga (Kissimmee)','3A',4,8],['Windermere','3A',4,8],
+    ['Auburndale','3A',5,9],['Bartow','3A',5,9],['Celebration','3A',5,9],['Davenport','3A',5,9],['Haines City','3A',5,9],['Osceola (Kissimmee)','3A',5,9],['Poinciana (Kissimmee)','3A',5,9],['Ridge Community (Davenport)','3A',5,9],['Winter Haven','3A',5,9],
+    ['Cypress Creek (Wesley Chapel)','3A',5,10],['George Jenkins (Lakeland)','3A',5,10],['Lake Gibson (Lakeland)','3A',5,10],['Lakeland','3A',5,10],['Land O Lakes','3A',5,10],['Mitchell (New Port Richey)','3A',5,10],["Sunlake (Land O'Lakes)",'3A',5,10],['Wesley Chapel','3A',5,10],['Wiregrass Ranch (Wesley Chapel)','3A',5,10],
+    ['Lakewood Ranch (Bradenton)','3A',6,11],['Manatee (Bradenton)','3A',6,11],['North Port','3A',6,11],['Palmetto','3A',6,11],['Parrish','3A',6,11],['Riverview (Sarasota)','3A',6,11],['Sarasota','3A',6,11],['Venice','3A',6,11],
+    ['Cape Coral','3A',6,12],['East Lee County (Lehigh Acres)','3A',6,12],['Gateway (Fort Myers)','3A',6,12],['Ida Baker (Cape Coral)','3A',6,12],['Immokalee','3A',6,12],['Lehigh (Lehigh Acres)','3A',6,12],['North Fort Myers','3A',6,12],['Palmetto Ridge (Naples)','3A',6,12],['Riverdale (Fort Myers)','3A',6,12],
+    ['Centennial (Port St. Lucie)','3A',7,13],['Dwyer (Palm Beach Gardens)','3A',7,13],['Fort Pierce Central','3A',7,13],['Jupiter','3A',7,13],['Martin County (Stuart)','3A',7,13],['Treasure Coast (Port St. Lucie)','3A',7,13],['Vero Beach','3A',7,13],
+    ['Palm Beach Central (Wellington)','3A',7,14],['Palm Beach Gardens','3A',7,14],['Palm Beach Lakes (West Palm Beach)','3A',7,14],['Royal Palm Beach','3A',7,14],['Seminole Ridge (Westlake)','3A',7,14],['Wellington','3A',7,14],
+    ['Dr. Joaquin Garcia (Lake Worth)','3A',8,15],['John I. Leonard (Greenacres)','3A',8,15],['Lake Worth','3A',8,15],['Park Vista (Lake Worth)','3A',8,15],['Santaluces (Lantana)','3A',8,15],
+    ['Archbishop McCarthy (Southwest Ranches)','3A',8,16],['Boca Raton','3A',8,16],['Homestead','3A',8,16],['Olympic Heights (Boca Raton)','3A',8,16],['Spanish River (Boca Raton)','3A',8,16],['West Boca Raton','3A',8,16],
+    // 2A
+    ['Choctawhatchee (Fort Walton Beach)','2A',1,1],['Escambia (Pensacola)','2A',1,1],['Fort Walton Beach','2A',1,1],['Gulf Breeze','2A',1,1],['Milton','2A',1,1],['Pensacola','2A',1,1],['Pine Forest (Pensacola)','2A',1,1],['Washington (Pensacola)','2A',1,1],['West Florida (Pensacola)','2A',1,1],
+    ['Arnold (Panama City Beach)','2A',1,2],['Bay (Panama City)','2A',1,2],['Chiles (Tallahassee)','2A',1,2],['Godby (Tallahassee)','2A',1,2],['Leon (Tallahassee)','2A',1,2],['Lincoln (Tallahassee)','2A',1,2],['Mosley (Lynn Haven)','2A',1,2],['Rickards (Tallahassee)','2A',1,2],['Wakulla (Crawfordville)','2A',1,2],
+    ['Baker County (Glen St. Mary)','2A',2,3],['Clay (Green Cove Springs)','2A',2,3],['Columbia (Lake City)','2A',2,3],['Fleming Island','2A',2,3],['Middleburg','2A',2,3],['Orange Park','2A',2,3],['Ridgeview (Orange Park)','2A',2,3],['Suwannee (Live Oak)','2A',2,3],
+    ['Ed White (Jacksonville)','2A',2,4],['Paxon (Jacksonville)','2A',2,4],['Raines (Jacksonville)','2A',2,4],['Ribault (Jacksonville)','2A',2,4],['Riverside (Jacksonville)','2A',2,4],['Stanton (Jacksonville)','2A',2,4],['Terry Parker (Jacksonville)','2A',2,4],['Westside (Jacksonville)','2A',2,4],['Yulee','2A',2,4],
+    ['Bishop Kenny (Jacksonville)','2A',3,5],['Englewood (Jacksonville)','2A',3,5],['Menendez (St. Augustine)','2A',3,5],['Palatka','2A',3,5],['St. Augustine','2A',3,5],['Wolfson (Jacksonville)','2A',3,5],
+    ['Belleview','2A',3,6],['Eastside (Gainesville)','2A',3,6],['Gainesville','2A',3,6],['Lake Weir (Ocala)','2A',3,6],['North Marion (Citra)','2A',3,6],['Santa Fe (Alachua)','2A',3,6],['Vanguard (Ocala)','2A',3,6],
+    ['Citrus (Inverness)','2A',4,7],['Crystal River','2A',4,7],['Eustis','2A',4,7],['Lecanto','2A',4,7],['Leesburg','2A',4,7],['Mount Dora','2A',4,7],['Tavares','2A',4,7],['Villages','2A',4,7],
+    ['Atlantic (Port Orange)','2A',4,8],['Bishop Moore (Orlando)','2A',4,8],['Deltona','2A',4,8],['Jones (Orlando)','2A',4,8],['Liberty (Kissimmee)','2A',4,8],['New Smyrna Beach','2A',4,8],['Pine Ridge (Deltona)','2A',4,8],['Seabreeze (Daytona Beach)','2A',4,8],['Winter Springs','2A',4,8],
+    ['Central (Brooksville)','2A',5,9],['Fivay (Hudson)','2A',5,9],['Hernando (Brooksville)','2A',5,9],['Hudson','2A',5,9],['Nature Coast (Brooksville)','2A',5,9],['Springstead (Spring Hill)','2A',5,9],['Weeki Wachee','2A',5,9],
+    ['Gulf (New Port Richey)','2A',5,10],['Kathleen (Lakeland)','2A',5,10],['McKeel (Lakeland)','2A',5,10],['Pasco (Dade City)','2A',5,10],['River Ridge (New Port Richey)','2A',5,10],['Zephyrhills','2A',5,10],
+    ['DeSoto County (Arcadia)','2A',6,11],['Hardee (Wauchula)','2A',6,11],['Lake Region (Eagle Lake)','2A',6,11],['Lake Wales','2A',6,11],['Mulberry','2A',6,11],['Sebring','2A',6,11],['Tenoroc (Lakeland)','2A',6,11],
+    ['Bayshore (Bradenton)','2A',6,12],['Booker (Sarasota)','2A',6,12],['Braden River (Bradenton)','2A',6,12],['Charlotte (Punta Gorda)','2A',6,12],['Lemon Bay (Englewood)','2A',6,12],['Port Charlotte','2A',6,12],['Southeast (Bradenton)','2A',6,12],['Wellen Park (North Port)','2A',6,12],
+    ['Cypress Lake (Fort Myers)','2A',7,13],['Dunbar (Fort Myers)','2A',7,13],['Estero','2A',7,13],['Fort Myers','2A',7,13],['Island Coast (Cape Coral)','2A',7,13],['LaBelle','2A',7,13],['Mariner (Cape Coral)','2A',7,13],['South Fort Myers','2A',7,13],
+    ['Aubrey Rogers (Naples)','2A',7,14],['Barron Collier (Naples)','2A',7,14],['Bonita Springs','2A',7,14],['Golden Gate (Naples)','2A',7,14],['Gulf Coast (Naples)','2A',7,14],['Lely (Naples)','2A',7,14],['Naples','2A',7,14],
+    ['Fort Pierce Westwood','2A',8,15],['Jensen Beach','2A',8,15],['Legacy (Port St. Lucie)','2A',8,15],['Okeechobee','2A',8,15],['Port St. Lucie','2A',8,15],['Sebastian River (Sebastian)','2A',8,15],['South Fork (Stuart)','2A',8,15],
+    ['Atlantic (Delray Beach)','2A',8,16],['Blanche Ely (Pompano Beach)','2A',8,16],['Boynton Beach','2A',8,16],['Forest Hill (West Palm Beach)','2A',8,16],['Key West','2A',8,16],['Pompano Beach','2A',8,16],['Suncoast (Riviera Beach)','2A',8,16],
+    // 1A
+    ['Baker','1A',1,1],['Central (Milton)','1A',1,1],['Destin','1A',1,1],['Freeport','1A',1,1],['Jay','1A',1,1],['Northview (Century)','1A',1,1],['Seacoast Collegiate (Santa Rosa Beach)','1A',1,1],['South Walton (Santa Rosa Beach)','1A',1,1],['Walton (DeFuniak Springs)','1A',1,1],
+    ['Bozeman (Panama City)','1A',1,2],['Chipley','1A',1,2],['Graceville','1A',1,2],['Holmes County (Bonifay)','1A',1,2],['Ponce de Leon','1A',1,2],['Poplar Springs (Graceville)','1A',1,2],['Rutherford (Panama City)','1A',1,2],['Vernon','1A',1,2],
+    ['Altha','1A',2,3],['Blountstown','1A',2,3],['Franklin County (Eastpoint)','1A',2,3],['Liberty County (Bristol)','1A',2,3],['North Bay Haven (Panama City)','1A',2,3],['Port St. Joe','1A',2,3],['Wewahitchka','1A',2,3],
+    ['Gadsden County (Havana)','1A',2,4],['Hamilton County (Jasper)','1A',2,4],['Maclay (Tallahassee)','1A',2,4],['Madison County (Madison)','1A',2,4],['Marianna','1A',2,4],['Sneads','1A',2,4],['Taylor County (Perry)','1A',2,4],
+    ['Andrew Jackson (Jacksonville)','1A',3,5],['Bolles (Jacksonville)','1A',3,5],['Cedar Creek Christian (Jacksonville)','1A',3,5],['Episcopal (Jacksonville)','1A',3,5],['Fernandina Beach','1A',3,5],['University Christian (Jacksonville)','1A',3,5],['West Nassau (Callahan)','1A',3,5],
+    ['Baldwin','1A',3,6],['Bishop Snyder (Jacksonville)','1A',3,6],['Bradford (Starke)','1A',3,6],['Eagles View (Jacksonville)','1A',3,6],['St. Johns Country Day (Orange Park)','1A',3,6],['Temple Christian (Jacksonville)','1A',3,6],['Union County (Lake Butler)','1A',3,6],
+    ['Bell','1A',4,7],['Branford','1A',4,7],['Bronson','1A',4,7],['Cedar Key','1A',4,7],['Chiefland','1A',4,7],['Fort White','1A',4,7],['Newberry','1A',4,7],['Trenton','1A',4,7],['Williston','1A',4,7],
+    ['Crescent City','1A',4,8],['Father Lopez (Daytona Beach)','1A',4,8],['Florida Deaf and Blind (St. Augustine)','1A',4,8],['Hawthorne','1A',4,8],['Interlachen','1A',4,8],['Keystone Heights','1A',4,8],['Peniel Baptist (Palatka)','1A',4,8],['Taylor (Pierson)','1A',4,8],
+    ['Foundation Academy (Winter Garden)','1A',5,9],['Montverde Academy','1A',5,9],['Mount Dora Christian','1A',5,9],['St. John Lutheran (Ocala)','1A',5,9],['Trinity Catholic (Ocala)','1A',5,9],['Umatilla','1A',5,9],['Wildwood','1A',5,9],['Windermere Prep','1A',5,9],
+    ['Cornerstone Charter (Belle Isle)','1A',5,10],['Faith Christian (Orlando)','1A',5,10],['First Academy (Orlando)','1A',5,10],['International Community (Winter Park)','1A',5,10],['Lake Mary Prep','1A',5,10],['Orangewood Christian (Maitland)','1A',5,10],['The Masters Academy (Oviedo)','1A',5,10],['Trinity Preparatory (Winter Park)','1A',5,10],
+    ["Academy at the Lakes (Land O'Lakes)",'1A',6,11],['Anclote (Holiday)','1A',6,11],["Angeline Academy (Land O'Lakes)",'1A',6,11],['Brooks DeBartolo (Tampa)','1A',6,11],['Dunnellon','1A',6,11],['Hernando Christian (Brooksville)','1A',6,11],['South Sumter (Bushnell)','1A',6,11],
+    ['Avon Park','1A',6,12],['Discovery (Lake Alfred)','1A',6,12],['Fort Meade','1A',6,12],['Frostproof','1A',6,12],['Lake Placid','1A',6,12],['Moore Haven','1A',6,12],['New Dimensions (Kissimmee)','1A',6,12],
+    ['Bishop Verot (Fort Myers)','1A',7,13],['Bradenton Christian','1A',7,13],['Cardinal Mooney (Sarasota)','1A',7,13],['Evangelical Christian (Fort Myers)','1A',7,13],['Imagine School (North Port)','1A',7,13],['Oasis (Cape Coral)','1A',7,13],['St. Stephens (Bradenton)','1A',7,13],
+    ['Cardinal Newman (West Palm Beach)','1A',7,14],['John Carroll (Fort Pierce)','1A',7,14],['Kings Academy (West Palm Beach)','1A',7,14],['Oxbridge Academy (West Palm Beach)','1A',7,14],['Pahokee','1A',7,14],['St. Edwards (Vero Beach)','1A',7,14],
+    ['American Heritage (Delray Beach)','1A',8,15],['Avant Garde (Hollywood)','1A',8,15],['Lake Worth Christian (Boynton Beach)','1A',8,15],['Pine Crest (Fort Lauderdale)','1A',8,15],['Somerset Canyons (Boynton Beach)','1A',8,15],['St. John Paul II (Boca Raton)','1A',8,15],['Village Academy (Delray Beach)','1A',8,15],
+    ['AIE Charter (Miami Springs)','1A',8,16],['Coral Shores (Tavernier)','1A',8,16],['Doctors Charter (Miami Shores)','1A',8,16],['Everglades Prep (Homestead)','1A',8,16],['Gulliver Prep (Pinecrest)','1A',8,16],['Keys Gate (Homestead)','1A',8,16],['Marathon','1A',8,16],['Somerset Charter (Silver Palms)','1A',8,16],
+    // Independent
+    ['Atlantic Christian (West Palm Beach)','Ind',0,0],['Boyd Anderson (Lauderdale Lakes)','Ind',0,0],['Chaminade-Madonna (Hollywood)','Ind',0,0],['Community Leadership (Tallahassee)','Ind',0,0],['Coral Springs','Ind',0,0],['Cornerstone Classical (Jacksonville)','Ind',0,0],['Dixie County (Cross City)','Ind',0,0],['Downtown Doral','Ind',0,0],['Hope Preparatory (Groveland)','Ind',0,0],['Indian River Charter (Vero Beach)','Ind',0,0],['McLaughlin (Lake Wales)','Ind',0,0],['Northeast (Oakland Park)','Ind',0,0],['Pensacola Catholic','Ind',0,0],['Riviera Beach Prep','Ind',0,0],['Somerset Academy (Wellington)','Ind',0,0],['Somerset College Prep (Miami)','Ind',0,0],['Vanguard (Lake Wales)','Ind',0,0],['Village School (Naples)','Ind',0,0],
+  ];
+  const FHSAA_SCHOOLS = { Boys: _FHSAA_LIST, Girls: _FHSAA_LIST };
+
+
   const STATUS_LABEL = {
     setup:      'Setup',
     'weigh-in': 'Weigh-In',
@@ -278,34 +338,13 @@ const HM = (() => {
     const m = _meet();
     if (!m) { _view = 'list'; return _buildListHTML(); }
 
-    const TEAM_COLORS = [
-      '#E85252','#E8A052','#FFD700','#5EC08A','#3A86D4','#A87FD4','#F5F5F5',
-    ];
     const schoolRows = m.schools.map(s => {
-      const col = s.color || '#C9A84C';
-      const isPreset = TEAM_COLORS.includes(col);
-      const swatches = TEAM_COLORS.map(c =>
-        `<button onclick="HM.setSchoolColor('${s.id}','${c}')" title="${c}"
-          style="width:22px;height:22px;border-radius:50%;background:${c};border:2px solid ${col===c?'#fff':'transparent'};
-          outline:${col===c?'2px solid '+c:'none'};outline-offset:1px;cursor:pointer;padding:0;flex-shrink:0;"></button>`
-      ).join('');
       return `
-      <div style="display:flex;align-items:flex-start;gap:10px;padding:9px 12px;background:var(--dark2);border-radius:5px;margin-bottom:6px;border:1px solid ${col}40;">
-        <div style="width:4px;align-self:stretch;border-radius:2px;background:${col};flex-shrink:0;margin-top:2px;"></div>
-        <div style="flex:1;min-width:0;">
-          <div style="font-size:14px;font-weight:500;margin-bottom:7px;display:flex;align-items:center;gap:8px;">
-            ${esc(s.name)}
-            ${s.isHome ? `<span style="font-size:10px;padding:2px 7px;border-radius:3px;background:var(--gold-a15);color:var(--gold);font-family:'Barlow Condensed',sans-serif;font-weight:600;letter-spacing:.5px;">HOME</span>` : ''}
-          </div>
-          <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;">
-            ${swatches}
-            <label title="Custom color" style="position:relative;width:22px;height:22px;flex-shrink:0;cursor:pointer;">
-              <div style="width:22px;height:22px;border-radius:50%;background:conic-gradient(red,yellow,lime,cyan,blue,magenta,red);
-                border:2px solid ${!isPreset?'#fff':'transparent'};outline:${!isPreset?'2px solid '+col:'none'};outline-offset:1px;"></div>
-              <input type="color" value="${col}" onchange="HM.setSchoolColor('${s.id}',this.value)"
-                style="position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;border:none;padding:0;">
-            </label>
-          </div>
+      <div style="display:flex;align-items:center;gap:10px;padding:9px 12px;background:var(--dark2);border-radius:5px;margin-bottom:6px;border:1px solid var(--dark3);">
+        <div style="flex:1;min-width:0;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <span style="font-size:14px;font-weight:500;">${esc(s.name)}</span>
+          ${s.isHome ? `<span style="font-size:10px;padding:2px 7px;border-radius:3px;background:var(--gold-a15);color:var(--gold);font-family:'Barlow Condensed',sans-serif;font-weight:600;letter-spacing:.5px;">HOME</span>` : ''}
+          ${s.fhsaaClass ? `<span style="font-size:10px;padding:2px 7px;border-radius:3px;background:var(--dark3);color:var(--muted);font-family:'Barlow Condensed',sans-serif;font-weight:600;letter-spacing:.5px;">${s.fhsaaClass === 'Ind' ? 'Ind' : `${s.fhsaaClass} · R${s.fhsaaRegion} · D${s.fhsaaDistrict}`}</span>` : ''}
         </div>
         <button onclick="HM.removeSchool('${s.id}')"
           style="background:none;border:none;cursor:pointer;color:#555;font-size:14px;padding:2px 5px;flex-shrink:0;"
@@ -591,13 +630,12 @@ const HM = (() => {
       const att     = current[lift][idx];
       const school  = m.schools.find(s => s.id === current.schoolId);
       const ordinal = ['1st','2nd','3rd'][idx] || (idx+1)+'th';
-      const nowColor = school?.color || 'var(--gold)';
       nowHTML = `
-        <div style="background:var(--dark2);border:2px solid var(--gold);border-radius:8px;padding:1.25rem 1.5rem;margin-bottom:1rem;border-left:5px solid ${nowColor};">
+        <div style="background:var(--dark2);border:2px solid var(--gold);border-radius:8px;padding:1.25rem 1.5rem;margin-bottom:1rem;">
           <div style="font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:600;letter-spacing:1.5px;color:var(--gold);margin-bottom:.5rem;">NOW LIFTING</div>
           <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;">
             <div>
-              <div style="font-size:22px;font-weight:700;font-family:'Barlow Condensed',sans-serif;display:flex;align-items:center;gap:8px;"><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:${nowColor};flex-shrink:0;"></span>${esc(current.name)}</div>
+              <div style="font-size:22px;font-weight:700;font-family:'Barlow Condensed',sans-serif;">${esc(current.name)}</div>
               <div style="font-size:13px;color:var(--muted);margin-top:2px;"><span style="color:${nowColor};">${esc(school?.name||'?')}</span> &nbsp;·&nbsp; ${current.wc} lbs &nbsp;·&nbsp; ${ordinal} attempt</div>
               <div style="font-size:30px;font-weight:700;font-family:'Barlow Condensed',sans-serif;margin-top:.4rem;color:var(--gold);">${att.declared} <span style="font-size:16px;color:var(--muted);">lbs</span></div>
               ${(_clockStart || _clockPausedRemaining !== null) ? `<div style="display:flex;align-items:center;gap:10px;margin-top:.25rem;flex-wrap:wrap;">
@@ -651,12 +689,11 @@ const HM = (() => {
         const att  = e[lift][idx];
         const school = m.schools.find(s => s.id === e.schoolId);
         const ord  = ['1st','2nd','3rd'][idx] || (idx+1)+'th';
-        const odColor = school?.color || '#555';
         return `<tr style="border-bottom:1px solid var(--dark3);">
           <td style="padding:${fL?'11px':'8px'} 10px;font-size:12px;color:var(--muted);text-align:center;">${qi+2}</td>
           <td style="padding:${fL?'11px':'8px'} 10px;">
-            <div style="font-weight:600;font-size:${fL?'18px':'14px'};"><span style="border-bottom:2px solid ${odColor};padding-bottom:1px;">${esc(e.name)}</span></div>
-            <div style="font-size:${fL?'14px':'11px'};color:var(--muted);"><span style="color:${odColor};">${esc(school?.name||'')}</span> · ${e.wc} · ${ord}</div>
+            <div style="font-weight:600;font-size:${fL?'18px':'14px'};">${esc(e.name)}</div>
+            <div style="font-size:${fL?'14px':'11px'};color:var(--muted);">${esc(school?.name||'')} · ${e.wc} · ${ord}</div>
           </td>
           <td style="padding:${fL?'11px':'8px'} 10px;">${_dots(e[lift], idx)}</td>
           <td style="padding:${fL?'11px':'8px'} 10px;text-align:right;white-space:nowrap;">
@@ -709,10 +746,9 @@ const HM = (() => {
           divider = `<tr><td colspan="5" style="padding:0;border-top:1px dashed var(--dark3);"></td></tr>`;
         }
         const opacity = canCheckIn ? '1' : '0.55';
-        const wtColor = school?.color || '#555';
         return divider + `<tr style="border-bottom:1px solid var(--dark3);opacity:${opacity};">
-          <td style="padding:${fL?'10px':'7px'} 10px;font-size:${fL?'17px':'13px'};font-weight:${canCheckIn?'600':'500'};"><span style="border-bottom:2px solid ${wtColor};padding-bottom:1px;">${esc(e.name)}</span></td>
-          <td style="padding:${fL?'10px':'7px'} 10px;font-size:${fL?'14px':'11px'};color:var(--muted);"><span style="color:${wtColor};">${esc(school?.name||'')}</span> · ${e.wc} · ${ord}</td>
+          <td style="padding:${fL?'10px':'7px'} 10px;font-size:${fL?'17px':'13px'};font-weight:${canCheckIn?'600':'500'};">${esc(e.name)}</td>
+          <td style="padding:${fL?'10px':'7px'} 10px;font-size:${fL?'14px':'11px'};color:var(--muted);">${esc(school?.name||'')} · ${e.wc} · ${ord}</td>
           <td style="padding:${fL?'10px':'7px'} 10px;">${_dots(e[lift], idx)}</td>
           <td style="padding:${fL?'10px':'7px'} 10px;text-align:right;font-family:'Barlow Condensed',sans-serif;font-size:${fL?'18px':'14px'};font-weight:700;">
             ${att.declared || '—'} <span style="font-size:${fL?'13px':'11px'};color:var(--muted);font-weight:400;">lbs</span>
@@ -754,10 +790,9 @@ const HM = (() => {
       const dRows = done.map(e => {
         const best   = _bestMade(e[lift]);
         const school = m.schools.find(s => s.id === e.schoolId);
-        const doneColor = school?.color || '#555';
         return `<tr style="border-bottom:1px solid var(--dark3);">
-          <td style="padding:${fL?'10px':'7px'} 10px;font-size:${fL?'17px':'14px'};font-weight:500;"><span style="border-bottom:2px solid ${doneColor};padding-bottom:1px;">${esc(e.name)}</span></td>
-          <td style="padding:${fL?'10px':'7px'} 10px;font-size:${fL?'14px':'12px'};color:var(--muted);"><span style="color:${doneColor};">${esc(school?.name||'')}</span> · ${e.wc}</td>
+          <td style="padding:${fL?'10px':'7px'} 10px;font-size:${fL?'17px':'14px'};font-weight:500;">${esc(e.name)}</td>
+          <td style="padding:${fL?'10px':'7px'} 10px;font-size:${fL?'14px':'12px'};color:var(--muted);">${esc(school?.name||'')} · ${e.wc}</td>
           <td style="padding:${fL?'10px':'7px'} 10px;">${_dots(e[lift], -1)}</td>
           <td style="padding:${fL?'10px':'7px'} 10px;text-align:right;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:${fL?'18px':'15px'};color:${best?'var(--gold)':'#E07070'};">${best ? best+' lbs' : 'Bomb'}</td>
         </tr>`;
@@ -1169,10 +1204,9 @@ const HM = (() => {
         const hasBench  = e.discipline === 'both' || e.discipline === 'traditional' || e.discipline === 'exhibition';
         const oTot = hasSnatch ? _olympicTotal(e) : null;
         const tTot = hasBench  ? _traditionalTotal(e) : null;
-        const resColor = school?.color || '#555';
         return `<tr style="border-bottom:1px solid var(--dark3);">
-          <td style="padding:8px 10px;font-weight:500;cursor:pointer;" onclick="HM.openEditResultModal('${e.id}')" title="Click to edit results"><span style="border-bottom:2px solid ${resColor};padding-bottom:1px;">${esc(e.name)}</span> <span style="font-size:10px;color:var(--muted);font-family:'Barlow Condensed',sans-serif;">✏</span></td>
-          <td style="padding:8px 10px;font-size:12px;color:${school?.color||'var(--muted)'};">${esc(school?.name||'')}</td>
+          <td style="padding:8px 10px;font-weight:500;cursor:pointer;" onclick="HM.openEditResultModal('${e.id}')" title="Click to edit results">${esc(e.name)} <span style="font-size:10px;color:var(--muted);font-family:'Barlow Condensed',sans-serif;">✏</span></td>
+          <td style="padding:8px 10px;font-size:12px;color:var(--muted);">${esc(school?.name||'')}</td>
           <td style="padding:8px 10px;font-size:11px;text-align:center;color:var(--muted);">${discMap[e.discipline]||e.discipline}</td>
           ${hasSnatch
             ? `<td style="padding:8px 6px;text-align:center;">${_dots(e.snatch,-1)}</td>
@@ -1258,36 +1292,226 @@ const HM = (() => {
     const m = _meet(); if (!m) return;
     autoSaveSetup();
     if (isHome && m.schools.some(s => s.isHome)) { alert('A home school is already added.'); return; }
-    const defaultName = isHome && typeof team === 'function' ? (team()?.name || '') : '';
+
+    window._fhsaaIsHome        = isHome;
+    window._fhsaaClassFilter   = 'All';
+    window._fhsaaRegionFilter  = 0;
+    window._fhsaaDistrictFilter= 0;
+    window._fhsaaPickedNames   = new Set();
+
+    const pillStyle = (active) =>
+      `font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:600;padding:2px 10px;border-radius:12px;border:1px solid var(--dark3);cursor:pointer;letter-spacing:.5px;` +
+      (active ? `background:var(--gold);color:var(--black);` : `background:none;color:var(--muted);`);
+
+    const classPills = ['All','3A','2A','1A','Ind'].map(f =>
+      `<button id="fhsaa-c-${f}" onclick="HM._setClassFilter('${f}')" style="${pillStyle(f==='All')}">${f}</button>`
+    ).join('');
+
     document.getElementById('modal-body').innerHTML = `
-      <h3>${isHome ? 'Add Home School' : 'Add Visiting School'}</h3>
-      <div class="form-field">
-        <label>School Name</label>
-        <input type="text" id="hm-school-name" value="${esc(defaultName)}" placeholder="School name" style="font-size:15px;">
+      <h3 style="margin-bottom:10px;">${isHome ? 'Add Home School' : 'Add Visiting School'}</h3>
+      <div class="form-field" style="margin-bottom:8px;">
+        <input type="text" id="hm-school-name" placeholder="Search by name…"
+          oninput="HM._filterSchools()" style="font-size:14px;width:100%;">
       </div>
-      <div class="modal-actions">
+      <div style="display:flex;gap:5px;margin-bottom:6px;flex-wrap:wrap;" id="fhsaa-class-row">${classPills}</div>
+      <div id="fhsaa-region-row" style="display:none;display:flex;gap:5px;margin-bottom:6px;flex-wrap:wrap;"></div>
+      <div id="fhsaa-district-row" style="display:none;gap:5px;margin-bottom:6px;flex-wrap:wrap;"></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+        <span id="fhsaa-count" style="font-size:11px;color:var(--muted);"></span>
+        <button onclick="HM._selectAllVisible()" style="font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:600;padding:2px 9px;border-radius:3px;border:1px solid var(--dark3);background:none;color:var(--muted);cursor:pointer;">Select All</button>
+      </div>
+      <div id="fhsaa-list" style="max-height:260px;overflow-y:auto;border:1px solid var(--dark3);border-radius:4px;background:var(--dark);"></div>
+      <div id="fhsaa-selected-bar" style="display:none;margin-top:8px;padding:7px 11px;background:var(--gold-a10);border:1px solid var(--gold-a30);border-radius:4px;font-size:13px;color:var(--gold-light);"></div>
+      <div class="modal-actions" style="margin-top:12px;">
         <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
-        <button class="btn btn-gold" onclick="HM.saveSchool(${isHome})">Add School</button>
+        <button id="fhsaa-add-btn" class="btn btn-gold" onclick="HM.saveSchool()" disabled style="opacity:.4;">Add Schools</button>
       </div>`;
+
     document.getElementById('overlay').style.display = 'flex';
-    setTimeout(() => { const el = document.getElementById('hm-school-name'); if(el){el.focus();el.select();} }, 50);
+    setTimeout(() => document.getElementById('hm-school-name')?.focus(), 50);
+    _filterSchools();
   }
 
-  function saveSchool(isHome) {
-    const name = document.getElementById('hm-school-name')?.value.trim();
-    if (!name) { alert('Enter a school name.'); return; }
+  function _getFilteredFhsaa() {
+    const m = _meet(); if (!m) return [];
+    const gender = m.gender || 'Boys';
+    const list   = FHSAA_SCHOOLS[gender] || [];
+    const existing = new Set(m.schools.map(s => s.name));
+    const q  = (document.getElementById('hm-school-name')?.value || '').toLowerCase();
+    const cf = window._fhsaaClassFilter  || 'All';
+    const rf = window._fhsaaRegionFilter  || 0;
+    const df = window._fhsaaDistrictFilter|| 0;
+    return list.filter(([n, c, r, d]) =>
+      !existing.has(n) &&
+      (cf === 'All' || c === cf) &&
+      (!rf || r === rf) &&
+      (!df || d === df) &&
+      n.toLowerCase().includes(q)
+    );
+  }
+
+  function _filterSchools() {
+    const filtered = _getFilteredFhsaa();
+    const picked   = window._fhsaaPickedNames || new Set();
+    const cf = window._fhsaaClassFilter || 'All';
+    const rf = window._fhsaaRegionFilter || 0;
+
+    // Rebuild region row
+    const regionRow = document.getElementById('fhsaa-region-row');
+    if (regionRow) {
+      if (cf !== 'All' && cf !== 'Ind') {
+        const m2 = _meet();
+        const gender = m2?.gender || 'Boys';
+        const allForClass = (FHSAA_SCHOOLS[gender] || []).filter(([,c]) => c === cf);
+        const regions = [...new Set(allForClass.map(([,,r]) => r))].sort((a,b) => a-b);
+        const pillStyle = (active) =>
+          `font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:600;padding:2px 10px;border-radius:12px;border:1px solid var(--dark3);cursor:pointer;letter-spacing:.5px;` +
+          (active ? `background:var(--gold);color:var(--black);` : `background:none;color:var(--muted);`);
+        regionRow.innerHTML = [0, ...regions].map(r =>
+          `<button id="fhsaa-r-${r}" onclick="HM._setRegionFilter(${r})" style="${pillStyle(rf===r)}">${r===0?'All Regions':'R'+r}</button>`
+        ).join('');
+        regionRow.style.display = 'flex';
+      } else {
+        regionRow.style.display = 'none';
+        regionRow.innerHTML = '';
+      }
+    }
+
+    // Rebuild district row
+    const districtRow = document.getElementById('fhsaa-district-row');
+    if (districtRow) {
+      if (cf !== 'All' && cf !== 'Ind' && rf) {
+        const m2 = _meet();
+        const gender = m2?.gender || 'Boys';
+        const allForClassRegion = (FHSAA_SCHOOLS[gender] || []).filter(([,c,r2]) => c === cf && r2 === rf);
+        const districts = [...new Set(allForClassRegion.map(([,,,d]) => d))].sort((a,b) => a-b);
+        const df = window._fhsaaDistrictFilter || 0;
+        const pillStyle = (active) =>
+          `font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:600;padding:2px 10px;border-radius:12px;border:1px solid var(--dark3);cursor:pointer;letter-spacing:.5px;` +
+          (active ? `background:var(--gold);color:var(--black);` : `background:none;color:var(--muted);`);
+        districtRow.innerHTML = [0, ...districts].map(d =>
+          `<button id="fhsaa-d-${d}" onclick="HM._setDistrictFilter(${d})" style="${pillStyle(df===d)}">${d===0?'All Districts':'D'+d}</button>`
+        ).join('');
+        districtRow.style.display = 'flex';
+      } else {
+        districtRow.style.display = 'none';
+        districtRow.innerHTML = '';
+      }
+    }
+
+    // Render school list
+    const el = document.getElementById('fhsaa-list');
+    const countEl = document.getElementById('fhsaa-count');
+    if (!el) return;
+    if (!filtered.length) {
+      el.innerHTML = `<div style="padding:1rem;color:var(--muted);font-size:13px;text-align:center;">No schools match — type a custom name and click Add Schools</div>`;
+      if (countEl) countEl.textContent = '';
+    } else {
+      if (countEl) countEl.textContent = `${filtered.length} school${filtered.length!==1?'s':''}`;
+      el.innerHTML = filtered.map(([n, c, r, d]) => {
+        const badge   = c === 'Ind' ? 'Ind' : `${c} · R${r} · D${d}`;
+        const checked = picked.has(n);
+        return `<div class="fhsaa-row" data-name="${esc(n)}" onclick="HM._toggleSchool(${esc(JSON.stringify(n))})"
+          style="padding:8px 12px;cursor:pointer;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--dark3);${checked?'background:var(--gold-a12);':''}"
+          onmouseenter="if(!this.classList.contains('picked'))this.style.background='var(--dark2)'"
+          onmouseleave="this.style.background=window._fhsaaPickedNames?.has(${esc(JSON.stringify(n))})?'var(--gold-a12)':''">
+          <div style="width:16px;height:16px;border-radius:3px;border:2px solid ${checked?'var(--gold)':'var(--dark3)'};background:${checked?'var(--gold)':'transparent'};flex-shrink:0;display:flex;align-items:center;justify-content:center;">
+            ${checked?`<svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4l3 3 5-6" stroke="#0E0E0E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`:''}
+          </div>
+          <span style="font-size:14px;flex:1;">${esc(n)}</span>
+          <span style="font-size:11px;color:var(--muted);white-space:nowrap;">${badge}</span>
+        </div>`;
+      }).join('');
+    }
+
+    _updateAddBtn();
+  }
+
+  function _toggleSchool(name) {
+    const picked = window._fhsaaPickedNames || (window._fhsaaPickedNames = new Set());
+    if (picked.has(name)) picked.delete(name); else picked.add(name);
+    _filterSchools();
+  }
+
+  function _selectAllVisible() {
+    const filtered = _getFilteredFhsaa();
+    const picked   = window._fhsaaPickedNames || (window._fhsaaPickedNames = new Set());
+    const allPicked = filtered.every(([n]) => picked.has(n));
+    filtered.forEach(([n]) => allPicked ? picked.delete(n) : picked.add(n));
+    _filterSchools();
+  }
+
+  function _updateAddBtn() {
+    const picked = window._fhsaaPickedNames || new Set();
+    const count  = picked.size;
+    const inp    = document.getElementById('hm-school-name');
+    const custom = (inp?.value || '').trim();
+    const total  = count > 0 ? count : (custom ? 1 : 0);
+    const btn    = document.getElementById('fhsaa-add-btn');
+    const bar    = document.getElementById('fhsaa-selected-bar');
+    if (btn) {
+      btn.disabled     = total === 0;
+      btn.style.opacity= total === 0 ? '.4' : '1';
+      btn.textContent  = total === 0 ? 'Add Schools' : `Add ${total} School${total!==1?'s':''}`;
+    }
+    if (bar) {
+      if (count > 0) {
+        bar.textContent  = [...picked].join(', ');
+        bar.style.display= '';
+      } else {
+        bar.style.display= 'none';
+      }
+    }
+  }
+
+  function _setClassFilter(f) {
+    window._fhsaaClassFilter    = f;
+    window._fhsaaRegionFilter   = 0;
+    window._fhsaaDistrictFilter = 0;
+    ['All','3A','2A','1A','Ind'].forEach(x => {
+      const btn = document.getElementById(`fhsaa-c-${x}`);
+      if (!btn) return;
+      btn.style.background = x === f ? 'var(--gold)' : 'none';
+      btn.style.color       = x === f ? 'var(--black)' : 'var(--muted)';
+    });
+    _filterSchools();
+  }
+
+  function _setRegionFilter(r) {
+    window._fhsaaRegionFilter   = r;
+    window._fhsaaDistrictFilter = 0;
+    _filterSchools();
+  }
+
+  function _setDistrictFilter(d) {
+    window._fhsaaDistrictFilter = d;
+    _filterSchools();
+  }
+
+  function saveSchool() {
+    const isHome = window._fhsaaIsHome;
     const m = _meet(); if (!m) return;
-    const defaultColors = ['#E85252','#3A86D4','#5EC08A','#FFD700','#A87FD4','#E8A052','#F5F5F5'];
-    const color = defaultColors[m.schools.length % defaultColors.length];
-    m.schools.push({ id: _uid('sch'), name, isHome: !!isHome, color });
+    const picked  = window._fhsaaPickedNames || new Set();
+    const inp     = document.getElementById('hm-school-name');
+    const custom  = (inp?.value || '').trim();
+    const gender  = m.gender || 'Boys';
+    const fhsaa   = FHSAA_SCHOOLS[gender] || [];
+    const names = picked.size > 0 ? [...picked] : (custom ? [custom] : []);
+    if (!names.length) { alert('Select at least one school.'); return; }
+
+    names.forEach((name, i) => {
+      const entry  = fhsaa.find(([n]) => n === name);
+      const school = { id: _uid('sch'), name, isHome: !!(isHome && i === 0) };
+      if (entry) {
+        school.fhsaaClass    = entry[1];
+        school.fhsaaRegion   = entry[2];
+        school.fhsaaDistrict = entry[3];
+      }
+      m.schools.push(school);
+    });
+
+    window._fhsaaPickedNames = new Set();
     _save(); closeModal(); renderMain();
-  }
-
-  function setSchoolColor(schoolId, color) {
-    const m = _meet(); if (!m) return;
-    const s = m.schools.find(x => x.id === schoolId); if (!s) return;
-    s.color = color;
-    _save(); renderMain();
   }
 
   function removeSchool(schoolId) {
@@ -2199,7 +2423,7 @@ const HM = (() => {
 
       const rows = sorted.map(e => {
         const sch    = m.schools.find(s=>s.id===e.schoolId);
-        const bg     = hexToRgba(sch?.color||'#888', 0.13);
+        const bg     = 'transparent';
         const oTotal = _olympicTotal(e);
         const tTotal = _traditionalTotal(e);
         const oPts   = oMap[e.id]||'';
@@ -2583,7 +2807,7 @@ const HM = (() => {
 
       const rows = sorted.map(e => {
         const sch  = m.schools.find(s => s.id === e.schoolId);
-        const bg   = hexToRgba(sch?.color || '#888', 0.12);
+        const bg   = 'transparent';
         const isEx = e.discipline === 'exhibition';
         const sn1  = e.snatch[0]?.declared || '';
         const cj1  = e.cj[0]?.declared    || '';
@@ -2627,10 +2851,7 @@ const HM = (() => {
     }).join('');
 
     const schoolKey = m.schools.map(s =>
-      `<span style="display:inline-flex;align-items:center;gap:5px;margin-right:14px;">
-        <span style="display:inline-block;width:12px;height:12px;background:${hexToRgba(s.color||'#888',0.4)};border:1px solid ${s.color||'#888'};border-radius:2px;"></span>
-        ${esc(s.name)}
-      </span>`).join('');
+      `<span style="display:inline-flex;align-items:center;gap:5px;margin-right:14px;">${esc(s.name)}</span>`).join('');
 
     const css = `
       @page{size:Letter landscape;margin:.45in}
@@ -2864,7 +3085,9 @@ const HM = (() => {
     newMeet, openMeet, deleteMeet,
     // Setup
     autoSaveSetup, saveSetupAndProceed,
-    openAddSchoolModal, saveSchool, removeSchool, setSchoolColor,
+    openAddSchoolModal, saveSchool, removeSchool,
+    _filterSchools, _setClassFilter, _setRegionFilter, _setDistrictFilter,
+    _toggleSchool, _selectAllVisible,
     openAddEntryModal, saveEntry, removeEntry,
     openEditEntryModal, saveEditEntry,
     openImportRosterModal, confirmImportRoster,
