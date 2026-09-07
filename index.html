@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; object-src 'none'; frame-src 'none'; base-uri 'self'; connect-src 'self';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; object-src 'none'; frame-src 'none'; base-uri 'self'; connect-src 'self' http: https:;">
 <title>LiftBuilder — Weightlifting Program Manager</title>
 <link href="vendor/fonts.css" rel="stylesheet">
 <script src="vendor/chart.umd.js"></script>
@@ -259,6 +259,9 @@ select option{background:#232323;}
   <div class="header-nav" id="header-nav"></div>
   <div style="flex:1;"></div>
   <span id="save-badge" style="font-size:11px;color:#5EC08A;opacity:0;transition:opacity 0.4s;margin-right:4px;">✓ Saved</span>
+  <button id="sync-btn" onclick="openSyncSettings()" title="Cloud Sync" style="display:none;background:none;border:none;cursor:pointer;padding:4px 6px;border-radius:4px;display:flex;align-items:center;gap:4px;">
+    <span id="sync-icon" style="font-size:15px;color:var(--muted);">☁</span>
+  </button>
   <div id="header-actions" style="display:flex;align-items:center;gap:6px;margin-left:6px;"></div>
 </div>
 
@@ -2942,6 +2945,126 @@ function saveEditExercise(day, idx, section='main') {
 function closeModal(){document.getElementById('overlay').style.display='none';}
 
 // ═══════════════════════════════════════════════════
+//  CLOUD SYNC
+// ═══════════════════════════════════════════════════
+const SYNC_CFG_KEY  = 'liftbuilder_sync_cfg';
+const SYNC_TS_KEY   = 'liftbuilder_saved_at';
+let _syncStatus     = 'idle'; // 'idle'|'syncing'|'ok'|'error'
+let _syncPushTimer  = null;
+
+function _syncCfg() {
+  try { return JSON.parse(localStorage.getItem(SYNC_CFG_KEY) || 'null') || null; } catch { return null; }
+}
+
+function _renderSyncBtn() {
+  const btn  = document.getElementById('sync-btn');
+  const icon = document.getElementById('sync-icon');
+  if (!btn || !icon) return;
+  const cfg = _syncCfg();
+  if (!cfg) { btn.style.display = 'none'; return; }
+  btn.style.display = 'flex';
+  if      (_syncStatus === 'syncing') { icon.textContent = '↻'; icon.style.color = 'var(--gold)';   btn.title = 'Syncing…'; }
+  else if (_syncStatus === 'ok')      { icon.textContent = '☁'; icon.style.color = '#5EC08A';        btn.title = 'Synced'; }
+  else if (_syncStatus === 'error')   { icon.textContent = '☁'; icon.style.color = '#E07070';        btn.title = 'Sync error — click to open settings'; }
+  else                                { icon.textContent = '☁'; icon.style.color = 'var(--muted)';  btn.title = 'Cloud Sync'; }
+}
+
+async function _syncPush() {
+  const cfg = _syncCfg(); if (!cfg) return;
+  _syncStatus = 'syncing'; _renderSyncBtn();
+  try {
+    const savedAt = Date.now();
+    const res = await fetch(`${cfg.url}/api/sync`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'X-Api-Key': cfg.apiKey },
+      body: JSON.stringify({
+        liftbuilder_v1:           localStorage.getItem(STORAGE_KEY),
+        liftbuilder_hosted_meets: localStorage.getItem('liftbuilder_hosted_meets'),
+        savedAt,
+      }),
+    });
+    if (res.ok) { localStorage.setItem(SYNC_TS_KEY, String(savedAt)); _syncStatus = 'ok'; }
+    else        { _syncStatus = 'error'; }
+  } catch { _syncStatus = 'error'; }
+  _renderSyncBtn();
+}
+
+function _scheduleSyncPush() {
+  clearTimeout(_syncPushTimer);
+  _syncPushTimer = setTimeout(_syncPush, 2000);
+}
+
+async function _syncPull() {
+  const cfg = _syncCfg(); if (!cfg) return;
+  _syncStatus = 'syncing'; _renderSyncBtn();
+  try {
+    const res = await fetch(`${cfg.url}/api/sync`, { headers: { 'X-Api-Key': cfg.apiKey } });
+    if (!res.ok) { _syncStatus = 'error'; _renderSyncBtn(); return; }
+    const data      = await res.json();
+    const localTs   = parseInt(localStorage.getItem(SYNC_TS_KEY) || '0', 10);
+    const serverTs  = data.savedAt || 0;
+    if (serverTs > localTs) {
+      if (data.liftbuilder_v1)           localStorage.setItem(STORAGE_KEY, data.liftbuilder_v1);
+      if (data.liftbuilder_hosted_meets) localStorage.setItem('liftbuilder_hosted_meets', data.liftbuilder_hosted_meets);
+      localStorage.setItem(SYNC_TS_KEY, String(serverTs));
+      loadState(); render();
+    } else if (localTs > serverTs && localTs > 0) {
+      await _syncPush(); return;
+    }
+    _syncStatus = 'ok';
+  } catch { _syncStatus = 'error'; }
+  _renderSyncBtn();
+}
+
+function openSyncSettings() {
+  const cfg = _syncCfg() || { url: '', apiKey: '' };
+  document.getElementById('modal-body').innerHTML = `
+    <h3>Cloud Sync</h3>
+    <div class="note-bar">Connect to your LiftBuilder Sync Server to keep data in sync across all your devices.</div>
+    <div class="form-field"><label>Server URL</label><input id="sync-url" value="${esc(cfg.url)}" placeholder="http://100.x.x.x:4747"></div>
+    <div class="form-field"><label>API Key</label><input id="sync-key" type="password" value="${esc(cfg.apiKey)}" placeholder="your-secret-api-key"></div>
+    <div id="sync-test-result" style="font-size:13px;min-height:18px;margin-bottom:.5rem;"></div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="testSyncConn()">Test Connection</button>
+      ${cfg.url ? `<button class="btn btn-danger" onclick="clearSyncCfg()">Disconnect</button>` : ''}
+      <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-gold" onclick="saveSyncCfg()">Save &amp; Sync</button>
+    </div>`;
+  document.getElementById('overlay').style.display = 'flex';
+}
+
+async function testSyncConn() {
+  const url    = (document.getElementById('sync-url')?.value || '').trim().replace(/\/$/, '');
+  const apiKey = (document.getElementById('sync-key')?.value || '').trim();
+  const el     = document.getElementById('sync-test-result');
+  if (!url || !apiKey) { el.style.color = '#E07070'; el.textContent = 'Enter a URL and API key first.'; return; }
+  el.style.color = 'var(--gold)'; el.textContent = 'Testing…';
+  try {
+    const res = await fetch(`${url}/api/ping`, { headers: { 'X-Api-Key': apiKey } });
+    if (res.ok) { el.style.color = '#5EC08A'; el.textContent = '✓ Connected successfully.'; }
+    else        { el.style.color = '#E07070'; el.textContent = `✗ Server returned ${res.status} — check your API key.`; }
+  } catch (e) { el.style.color = '#E07070'; el.textContent = `✗ Could not reach server: ${e.message}`; }
+}
+
+function saveSyncCfg() {
+  const url    = (document.getElementById('sync-url')?.value || '').trim().replace(/\/$/, '');
+  const apiKey = (document.getElementById('sync-key')?.value || '').trim();
+  if (!url || !apiKey) { alert('Both a URL and API key are required.'); return; }
+  localStorage.setItem(SYNC_CFG_KEY, JSON.stringify({ url, apiKey }));
+  closeModal();
+  _renderSyncBtn();
+  _syncPull();
+}
+
+function clearSyncCfg() {
+  if (!confirm('Disconnect from sync server? Your local data will not be affected.')) return;
+  localStorage.removeItem(SYNC_CFG_KEY);
+  _syncStatus = 'idle';
+  closeModal();
+  _renderSyncBtn();
+}
+
+// ═══════════════════════════════════════════════════
 //  ROSTER  (shared across all programs)
 // ═══════════════════════════════════════════════════
 const GIRLS_WC = ['101','110','119','129','139','154','169','183','199','UNL'];
@@ -5140,6 +5263,7 @@ function saveState() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
     showSaveBadge();
     _renderUndoBtn();
+    _scheduleSyncPush();
   } catch(e) {
     console.warn('LiftBuilder: could not save to localStorage', e);
     if (e instanceof DOMException && (e.name === 'QuotaExceededError' || e.name === 'NS_ERROR_DOM_QUOTA_REACHED')) {
@@ -5688,6 +5812,8 @@ function initApp() {
   document.addEventListener('keydown', e => { if((e.ctrlKey||e.metaKey) && e.key==='z' && !e.shiftKey){ e.preventDefault(); undo(); } });
   document.addEventListener('click', () => { document.querySelectorAll('[id^="day-add-menu-"],[id^="lib-ex-menu-"],#roster-dl-menu').forEach(el => el.style.display='none'); });
   checkFerpaNotice();
+  _renderSyncBtn();
+  _syncPull();
   // Auto-save on any state change — patch key mutating functions
   const _origSaveNewWeek = saveNewWeek;
   saveNewWeek = function() { _origSaveNewWeek(); saveState(); };
