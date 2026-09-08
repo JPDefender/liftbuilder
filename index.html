@@ -259,9 +259,6 @@ select option{background:#232323;}
   <div class="header-nav" id="header-nav"></div>
   <div style="flex:1;"></div>
   <span id="save-badge" style="font-size:11px;color:#5EC08A;opacity:0;transition:opacity 0.4s;margin-right:4px;">✓ Saved</span>
-  <button id="sync-btn" onclick="openSyncSettings()" title="Cloud Sync" style="background:none;border:none;cursor:pointer;padding:4px 6px;border-radius:4px;display:flex;align-items:center;gap:4px;">
-    <span id="sync-icon" style="font-size:15px;color:var(--muted);">☁</span>
-  </button>
   <div id="header-actions" style="display:flex;align-items:center;gap:6px;margin-left:6px;"></div>
 </div>
 
@@ -3015,22 +3012,7 @@ async function _syncPull() {
   _renderSyncBtn();
 }
 
-function openSyncSettings() {
-  const cfg = _syncCfg() || { url: '', apiKey: '' };
-  document.getElementById('modal-body').innerHTML = `
-    <h3>Cloud Sync</h3>
-    <div class="note-bar">Connect to your LiftBuilder Sync Server to keep data in sync across all your devices.</div>
-    <div class="form-field"><label>Server URL</label><input id="sync-url" value="${esc(cfg.url)}" placeholder="http://100.x.x.x:4747"></div>
-    <div class="form-field"><label>API Key</label><input id="sync-key" type="password" value="${esc(cfg.apiKey)}" placeholder="your-secret-api-key"></div>
-    <div id="sync-test-result" style="font-size:13px;min-height:18px;margin-bottom:.5rem;"></div>
-    <div class="modal-actions">
-      <button class="btn btn-outline" onclick="testSyncConn()">Test Connection</button>
-      ${cfg.url ? `<button class="btn btn-danger" onclick="clearSyncCfg()">Disconnect</button>` : ''}
-      <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
-      <button class="btn btn-gold" onclick="saveSyncCfg()">Save &amp; Sync</button>
-    </div>`;
-  document.getElementById('overlay').style.display = 'flex';
-}
+function openSyncSettings() { openSettings(); }
 
 async function testSyncConn() {
   const url    = (document.getElementById('sync-url')?.value || '').trim().replace(/\/$/, '');
@@ -3050,17 +3032,19 @@ function saveSyncCfg() {
   const apiKey = (document.getElementById('sync-key')?.value || '').trim();
   if (!url || !apiKey) { alert('Both a URL and API key are required.'); return; }
   localStorage.setItem(SYNC_CFG_KEY, JSON.stringify({ url, apiKey }));
-  closeModal();
-  _renderSyncBtn();
   _syncPull();
+  openSettings();
 }
 
 function clearSyncCfg() {
   if (!confirm('Disconnect from sync server? Your local data will not be affected.')) return;
   localStorage.removeItem(SYNC_CFG_KEY);
   _syncStatus = 'idle';
-  closeModal();
-  _renderSyncBtn();
+  openSettings();
+}
+
+function syncNow() {
+  _syncPull();
 }
 
 // ═══════════════════════════════════════════════════
@@ -5769,6 +5753,28 @@ function openSettings() {
         <button onclick="importDataJSON()" class="btn btn-outline" style="font-size:12px;padding:5px 12px;flex-shrink:0;">⬆ Restore</button>
       </div>
     </div>
+    ${(function(){
+      const cfg = _syncCfg();
+      const url = cfg ? esc(cfg.url) : '';
+      const key = cfg ? esc(cfg.apiKey) : '';
+      const statusBadge = cfg
+        ? `<div style="display:flex;align-items:center;gap:6px;margin-bottom:12px;"><span style="color:#5EC08A;font-size:12px;">●</span><span style="font-size:12px;color:var(--muted);">Connected to <span style="color:var(--white);">${esc(cfg.url)}</span></span></div>`
+        : `<div style="font-size:12px;color:var(--muted);margin-bottom:12px;">Sync your data to a self-hosted server to keep it in sync across multiple devices.</div>`;
+      return `
+    <div style="font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:600;letter-spacing:1.5px;color:var(--muted);text-transform:uppercase;margin-bottom:8px;">Cloud Sync</div>
+    <div style="border:1px solid var(--dark3);border-radius:8px;padding:14px 16px;margin-bottom:1.5rem;">
+      ${statusBadge}
+      <div style="margin-bottom:8px;"><label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:.8px;">Server URL</label><input id="sync-url" value="${url}" placeholder="http://100.x.x.x:4747" style="width:100%;box-sizing:border-box;background:var(--dark1);border:1px solid var(--dark3);border-radius:5px;color:var(--white);font-size:13px;padding:7px 10px;"></div>
+      <div style="margin-bottom:8px;"><label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:.8px;">API Key</label><input id="sync-key" type="password" value="${key}" placeholder="your-secret-api-key" style="width:100%;box-sizing:border-box;background:var(--dark1);border:1px solid var(--dark3);border-radius:5px;color:var(--white);font-size:13px;padding:7px 10px;"></div>
+      <div id="sync-test-result" style="font-size:12px;min-height:16px;margin-bottom:10px;"></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn btn-outline" onclick="testSyncConn()" style="font-size:12px;padding:5px 12px;">Test Connection</button>
+        ${cfg ? `<button class="btn btn-outline" onclick="syncNow()" style="font-size:12px;padding:5px 12px;">↻ Sync Now</button>` : ''}
+        <button class="btn btn-gold" onclick="saveSyncCfg()" style="font-size:12px;padding:5px 12px;">Save</button>
+        ${cfg ? `<button class="btn btn-danger" onclick="clearSyncCfg()" style="font-size:12px;padding:5px 12px;">Disconnect</button>` : ''}
+      </div>
+    </div>`;
+    })()}
     <div style="height:1px;background:var(--dark3);margin-bottom:1rem;"></div>
     <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border:1px solid rgba(192,57,43,0.3);border-radius:8px;background:rgba(192,57,43,0.05);">
       <div><div style="font-size:14px;font-weight:600;color:#E07070;">Clear All Data</div><div style="font-size:12px;color:var(--muted);margin-top:2px;">Delete everything and start fresh — cannot be undone</div></div>
@@ -5811,7 +5817,6 @@ function initApp() {
   document.addEventListener('keydown', e => { if((e.ctrlKey||e.metaKey) && e.key==='z' && !e.shiftKey){ e.preventDefault(); undo(); } });
   document.addEventListener('click', () => { document.querySelectorAll('[id^="day-add-menu-"],[id^="lib-ex-menu-"],#roster-dl-menu').forEach(el => el.style.display='none'); });
   checkFerpaNotice();
-  _renderSyncBtn();
   _syncPull();
   // Auto-save on any state change — patch key mutating functions
   const _origSaveNewWeek = saveNewWeek;
